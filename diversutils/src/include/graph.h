@@ -41,6 +41,7 @@
 #include "cupt/parser.h"
 #include "stats.h"
 
+/*
 #ifndef NUM_MATRIX_THREADS
 #define NUM_MATRIX_THREADS 32
 #endif
@@ -48,6 +49,7 @@
 #ifndef NUM_ROW_THREADS
 #define NUM_ROW_THREADS 32
 #endif
+*/
 
 #define RANDOM_MODULO 65536
 #define RANDOM_MIN_VALUE -128.0
@@ -1717,14 +1719,14 @@ inline void distance_row_from_graph(const struct graph* restrict g, const int32_
 	}
 }
 
-int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector){
+int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector, const int16_t NUM_ROW_THREADS){
 	pthread_t threads[NUM_ROW_THREADS];
 	struct row_thread_arg args[NUM_ROW_THREADS];
 	uint64_t start_j = 0;
 	uint64_t end_j;
-	for(uint64_t k = 0 ; k < NUM_ROW_THREADS ; k++){
+	for(int16_t k = 0 ; k < NUM_ROW_THREADS ; k++){
 		end_j = start_j + floor(g->num_nodes / NUM_ROW_THREADS);
-		if(k < g->num_nodes % NUM_ROW_THREADS){
+		if(((uint64_t) k) < g->num_nodes % ((uint64_t) NUM_ROW_THREADS)){
 			end_j++;
 		}
 		args[k].i = i;
@@ -1739,7 +1741,7 @@ int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_
 		start_j = end_j;
 	}
 
-	for(int32_t i = 0 ; i < NUM_ROW_THREADS ; i++){
+	for(int16_t i = 0 ; i < NUM_ROW_THREADS ; i++){
 		if(pthread_join(threads[i], NULL) != 0){
 			perror("failed to join matrix thread\n");
 			return 1;
@@ -1786,7 +1788,7 @@ void* matrix_thread(void* args){
 	return NULL;
 }
 
-int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m){
+int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m, const int16_t NUM_MATRIX_THREADS){
 	if(m->a != m->b){
 		perror("m->a != m->b\n");
 		return 1;
