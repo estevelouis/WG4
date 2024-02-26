@@ -43,116 +43,6 @@
 #define BFR_SIZE 256
 #define MAX_FILES 1024
 
-/*
-#ifndef ENABLE_STIRLING
-#define ENABLE_STIRLING 1
-#endif
-#ifndef ENABLE_RICOTTA_SZEIDL
-#define ENABLE_RICOTTA_SZEIDL 1
-#endif
-#ifndef ENABLE_PAIRWISE
-#define ENABLE_PAIRWISE 1
-#endif
-#ifndef ENABLE_LEXICOGRAPHIC
-#define ENABLE_LEXICOGRAPHIC 0
-#endif
-#ifndef ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY
-#define ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY 1
-#endif
-#ifndef ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY
-#define ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY 1
-#endif
-#ifndef ENABLE_LEINSTER_COBBOLD_DIVERSITY
-#define ENABLE_LEINSTER_COBBOLD_DIVERSITY 0
-#endif
-#ifndef ENABLE_FUNCTIONAL_EVENNESS
-#define ENABLE_FUNCTIONAL_EVENNESS 0
-#endif
-#ifndef ENABLE_FUNCTIONAL_DISPERSION
-#define ENABLE_FUNCTIONAL_DISPERSION 1
-#endif
-#ifndef ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED
-#define ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED 1
-#endif
-
-#ifndef ENABLE_NON_DISPARITY_FUNCTIONS
-#define ENABLE_NON_DISPARITY_FUNCTIONS 1
-#endif
-
-#ifndef ENABLE_SHANNON_WEAVER_ENTROPY
-#define ENABLE_SHANNON_WEAVER_ENTROPY 1
-#endif
-#ifndef ENABLE_GOOD_ENTROPY
-#define ENABLE_GOOD_ENTROPY 1
-#endif
-#ifndef ENABLE_RENYI_ENTROPY
-#define ENABLE_RENYI_ENTROPY 1
-#endif
-#ifndef ENABLE_PATIL_TAILLIE_ENTROPY
-#define ENABLE_PATIL_TAILLIE_ENTROPY 1
-#endif
-#ifndef ENABLE_SIMPSON_INDEX
-#define ENABLE_SIMPSON_INDEX 1
-#endif
-#ifndef ENABLE_SIMPSON_DOMINANCE_INDEX
-#define ENABLE_SIMPSON_DOMINANCE_INDEX 1
-#endif
-#ifndef ENABLE_HILL_NUMBER_STANDARD
-#define ENABLE_HILL_NUMBER_STANDARD 1
-#endif
-#ifndef ENABLE_HILL_EVENNESS
-#define ENABLE_HILL_EVENNESS 1
-#endif
-#ifndef ENABLE_BERGER_PARKER_INDEX
-#define ENABLE_BERGER_PARKER_INDEX 1
-#endif
-#ifndef ENABLE_JUNGE1994_PAGE22
-#define ENABLE_JUNGE1994_PAGE22 1
-#endif
-#ifndef ENABLE_BRILLOUIN_DIVERSITY
-#define ENABLE_BRILLOUIN_DIVERSITY 1
-#endif
-#ifndef ENABLE_MCINTOSH_INDEX
-#define ENABLE_MCINTOSH_INDEX 1
-#endif
-#ifndef ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975
-#define ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975 1
-#endif
-#ifndef ENABLE_SW_E_HEIP
-#define ENABLE_SW_E_HEIP 1
-#endif
-#ifndef ENABLE_SW_E_ONE_MINUS_D
-#define ENABLE_SW_E_ONE_MINUS_D 1
-#endif
-#ifndef ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964
-#define ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964 1
-#endif
-#ifndef ENABLE_SW_E_MINUS_LN_D_PIELOU1977
-#define ENABLE_SW_E_MINUS_LN_D_PIELOU1977 1
-#endif
-#ifndef ENABLE_SW_F_2_1_ALATALO1981
-#define ENABLE_SW_F_2_1_ALATALO1981 1
-#endif
-#ifndef ENABLE_SW_G_2_1_MOLINARI1989
-#define ENABLE_SW_G_2_1_MOLINARI1989 1
-#endif
-#ifndef ENABLE_SW_E_BULLA1994
-#define ENABLE_SW_E_BULLA1994 1
-#endif
-#ifndef ENABLE_SW_O_BULLA1994
-#define ENABLE_SW_O_BULLA1994 1
-#endif
-#ifndef ENABLE_SW_E_MCI_PIELOU1969
-#define ENABLE_SW_E_MCI_PIELOU1969 1
-#endif
-#ifndef ENABLE_SW_E_PRIME_CAMARGO1993
-#define ENABLE_SW_E_PRIME_CAMARGO1993 1
-#endif
-#ifndef ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL
-#define ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL 1
-#endif
-*/
-
 #define GOOD_ALPHA 2.0
 #define GOOD_BETA 2.0
 #define RENYI_ALPHA 2.0
@@ -168,52 +58,6 @@
 #define SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA 2.0
 #define LEINSTER_COBBOLD_DIVERSITY_ALPHA 2.0
 
-/*
-#ifndef ENABLE_MULTITHREADED_MATRIX_GENERATION
-#define ENABLE_MULTITHREADED_MATRIX_GENERATION 1
-#endif
-
-#ifndef ENABLE_TIMINGS
-#define ENABLE_TIMINGS 1
-#endif
-
-#ifndef ENABLE_ITERATIVE_DISTANCE_COMPUTATION
-#define ENABLE_ITERATIVE_DISTANCE_COMPUTATION 0
-#endif
-#ifndef ENABLE_MULTITHREADED_ROW_GENERATION
-#define ENABLE_MULTITHREADED_ROW_GENERATION 1
-#endif
-
-#ifndef SENTENCE_COUNT_RECOMPUTE_STEP
-#define SENTENCE_COUNT_RECOMPUTE_STEP 1
-#endif
-#ifndef ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP
-#define ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP 0
-#endif
-
-#ifndef DOCUMENT_COUNT_RECOMPUTE_STEP
-#define DOCUMENT_COUNT_RECOMPUTE_STEP 1
-#endif
-#ifndef ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP
-#define ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP 0
-#endif
-
-#ifndef INPUT_PATH
-#define INPUT_PATH "measurement_files.txt"
-#endif
-#ifndef OUTPUT_PATH
-#define OUTPUT_PATH "measurement_output.tsv"
-#endif
-
-#ifndef TARGET_COLUMN
-#define TARGET_COLUMN UD_MWE
-#endif
-
-#ifndef W2V_PATH
-#define W2V_PATH "/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin"
-#endif
-*/
-
 enum {
 	CONLLU_COLUMN_UPOS,
 	CONLLU_COLUMN_DEPREL
@@ -224,7 +68,6 @@ const int32_t NUM_CONLLU_COLUMNS_TO_ADD = 0;
 
 const int32_t CONLLU_ADD_FORM = 0;
 
-// int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database){
 int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database, \
 	const int16_t NUM_ROW_THREADS, \
 	const int16_t NUM_MATRIX_THREADS, \
@@ -814,7 +657,7 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 
 int32_t measurement_from_cfg(const struct cfg* const config){
 	int32_t UD_COLUMN;
-	char* value_ud_column = cfg_get_value(config, "UD_COLUMN");
+	char* value_ud_column = cfg_get_value(config, "TARGET_COLUMN");
 	if(value_ud_column == NULL){UD_COLUMN = UD_FORM;}
 	else if(strcmp(value_ud_column, "UD_FORM") == 0){UD_COLUMN = UD_FORM;}
 	else if(strcmp(value_ud_column, "UD_MWE") == 0){UD_COLUMN = UD_MWE;}
