@@ -47,6 +47,7 @@
 #define GOOD_BETA 2.0
 #define RENYI_ALPHA 2.0
 #define PATIL_TAILLIE_ALPHA 1.0
+#define Q_LOGARITHMIC_Q 2.0
 #define HILL_NUMBER_STANDARD_ALPHA 2.0
 #define HILL_EVENNESS_ALPHA 2.0
 #define HILL_EVENNESS_BETA 1.0
@@ -87,6 +88,7 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 	const int8_t ENABLE_GOOD_ENTROPY, \
 	const int8_t ENABLE_RENYI_ENTROPY, \
 	const int8_t ENABLE_PATIL_TAILLIE_ENTROPY, \
+	const int8_t ENABLE_Q_LOGARITHMIC_ENTROPY, \
 	const int8_t ENABLE_SIMPSON_INDEX, \
 	const int8_t ENABLE_SIMPSON_DOMINANCE_INDEX, \
 	const int8_t ENABLE_HILL_NUMBER_STANDARD, \
@@ -108,6 +110,7 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 	const int8_t ENABLE_SW_E_MCI_PIELOU1969, \
 	const int8_t ENABLE_SW_E_PRIME_CAMARGO1993, \
 	const int8_t ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL, \
+	const int8_t ENABLE_NHC_E_Q, \
 	const int8_t ENABLE_TIMINGS, \
 	const int8_t ENABLE_ITERATIVE_DISTANCE_COMPUTATION, \
 	const int8_t ENABLE_MULTITHREADED_ROW_GENERATION, \
@@ -444,12 +447,13 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 
 		if(ENABLE_NON_DISPARITY_FUNCTIONS){
 			if(ENABLE_SHANNON_WEAVER_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				shannon_weaver_entropy_from_graph(g, &res);
+				shannon_weaver_entropy_from_graph(g, &res_entropy, &res_hill_number);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed SW entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
 			}
 			if(ENABLE_GOOD_ENTROPY){
 				double res;
@@ -460,20 +464,31 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 				fprintf(f_ptr, "\t%.10e", res);
 			}
 			if(ENABLE_RENYI_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				renyi_entropy_from_graph(g, &res, RENYI_ALPHA);
+				renyi_entropy_from_graph(g, &res_entropy, &res_hill_number, RENYI_ALPHA);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Renyi entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
 			}
 			if(ENABLE_PATIL_TAILLIE_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				patil_taillie_entropy_from_graph(g, &res, PATIL_TAILLIE_ALPHA);
+				patil_taillie_entropy_from_graph(g, &res_entropy, &res_hill_number, PATIL_TAILLIE_ALPHA);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Patil-Taillie entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
+			}
+			if(ENABLE_Q_LOGARITHMIC_ENTROPY){
+				double res_entropy;
+				double res_hill_number;
+				time_t t = time(NULL);
+				q_logarithmic_entropy_from_graph(g, &res_entropy, &res_hill_number, Q_LOGARITHMIC_Q);
+				time_t delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){printf("[log] [time] Computed q-logarithmic entropy in %lis\n", delta_t);}
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
 			}
 			if(ENABLE_SIMPSON_INDEX){
 				double res;
@@ -636,6 +651,15 @@ int32_t apply_diversity_functions_to_graph_no_macros(struct graph* g, struct min
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E var Smith and Wilson 1996 original in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
 			}
+			if(ENABLE_NHC_E_Q){
+				double res_nhc;
+				double res_e_q;
+				time_t t = time(NULL);
+				nhc_e_q_from_graph(g, &res_nhc, &res_e_q);
+				time_t delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){printf("[log] [time] Computed NHC_E_Q in %lis\n", delta_t);}
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_nhc, res_e_q);
+			}
 		}
 
 		fprintf(f_ptr, "\n");
@@ -680,6 +704,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 	const int8_t ENABLE_GOOD_ENTROPY = (strcmp(cfg_get_value(config, "ENABLE_GOOD_ENTROPY"), "1") == 0);
 	const int8_t ENABLE_RENYI_ENTROPY = (strcmp(cfg_get_value(config, "ENABLE_RENYI_ENTROPY"), "1") == 0);
 	const int8_t ENABLE_PATIL_TAILLIE_ENTROPY = (strcmp(cfg_get_value(config, "ENABLE_PATIL_TAILLIE_ENTROPY"), "1") == 0);
+	const int8_t ENABLE_Q_LOGARITHMIC_ENTROPY = (strcmp(cfg_get_value(config, "ENABLE_Q_LOGARITHMIC_ENTROPY"), "1") == 0);
 	const int8_t ENABLE_SIMPSON_INDEX = (strcmp(cfg_get_value(config, "ENABLE_SIMPSON_INDEX"), "1") == 0);
 	const int8_t ENABLE_SIMPSON_DOMINANCE_INDEX = (strcmp(cfg_get_value(config, "ENABLE_SIMPSON_DOMINANCE_INDEX"), "1") == 0);
 	const int8_t ENABLE_HILL_NUMBER_STANDARD = (strcmp(cfg_get_value(config, "ENABLE_HILL_NUMBER_STANDARD"), "1") == 0);
@@ -701,6 +726,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 	const int8_t ENABLE_SW_E_MCI_PIELOU1969 = (strcmp(cfg_get_value(config, "ENABLE_SW_E_MCI_PIELOU1969"), "1") == 0);
 	const int8_t ENABLE_SW_E_PRIME_CAMARGO1993 = (strcmp(cfg_get_value(config, "ENABLE_SW_E_PRIME_CAMARGO1993"), "1") == 0);
 	const int8_t ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL = (strcmp(cfg_get_value(config, "ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL"), "1") == 0);
+	const int8_t ENABLE_NHC_E_Q = (strcmp(cfg_get_value(config, "ENABLE_NHC_E_Q"), "1") == 0);
 
 	const int8_t ENABLE_TIMINGS = (strcmp(cfg_get_value(config, "ENABLE_TIMINGS"), "1") == 0);
 	const int8_t ENABLE_ITERATIVE_DISTANCE_COMPUTATION = (strcmp(cfg_get_value(config, "ENABLE_ITERATIVE_DISTANCE_COMPUTATION"), "1") == 0);
@@ -718,6 +744,8 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 	const char* INPUT_PATH = cfg_get_value(config, "INPUT_PATH");
 	const char* OUTPUT_PATH = cfg_get_value(config, "OUTPUT_PATH");
 	const char* W2V_PATH = cfg_get_value(config, "W2V_PATH");
+
+	const char* JSONL_CONTENT_KEY = cfg_get_value(config, "JSONL_CONTENT_KEY");
 
 
 
@@ -815,10 +843,11 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 
 
 	if(ENABLE_NON_DISPARITY_FUNCTIONS){
-		if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_ptr, "\tshannon_weaver_entropy");}
+		if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_ptr, "\tshannon_weaver_entropy\tshannon_weaver_hill_number");}
 		if(ENABLE_GOOD_ENTROPY){fprintf(f_ptr, "\tgood_entropy_alpha%.4e_beta%.4e", GOOD_ALPHA, GOOD_BETA);}
-		if(ENABLE_RENYI_ENTROPY){fprintf(f_ptr, "\trenyi_entropy_alpha%.4e", RENYI_ALPHA);}
-		if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_ptr, "\tpatil_taillie_entropy_alpha%.4e", PATIL_TAILLIE_ALPHA);}
+		if(ENABLE_RENYI_ENTROPY){fprintf(f_ptr, "\trenyi_entropy_alpha%.4e\trenyi_hill_number_alpha%.4e", RENYI_ALPHA, RENYI_ALPHA);}
+		if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_ptr, "\tpatil_taillie_entropy_alpha%.4e\tpatil_taillie_hill_number_alpha%.4e", PATIL_TAILLIE_ALPHA, PATIL_TAILLIE_ALPHA);}
+		if(ENABLE_Q_LOGARITHMIC_ENTROPY){fprintf(f_ptr, "\tq_logarithmic_entropy_alpha%.4e\tq_logarithmic_hill_number_alpha%.4e", Q_LOGARITHMIC_Q, Q_LOGARITHMIC_Q);}
 		if(ENABLE_SIMPSON_INDEX){fprintf(f_ptr, "\tsimpson_index");}
 		if(ENABLE_SIMPSON_DOMINANCE_INDEX){fprintf(f_ptr, "\tsimpson_dominance_index");}
 		if(ENABLE_HILL_NUMBER_STANDARD){fprintf(f_ptr, "\thill_number_standard_alpha%.4e", HILL_NUMBER_STANDARD_ALPHA);}
@@ -839,6 +868,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 		if(ENABLE_SW_E_MCI_PIELOU1969){fprintf(f_ptr, "\tsw_e_mci_pielou1969");}
 		if(ENABLE_SW_E_PRIME_CAMARGO1993){fprintf(f_ptr, "\tsw_e_prime_camargo1993");}
 		if(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL){fprintf(f_ptr, "\tsw_e_var_smith_and_wilson1996_original");}
+		if(ENABLE_NHC_E_Q){fprintf(f_ptr, "\tNHC\tE_Q");}
 	}
 
 	fprintf(f_ptr, "\n");
@@ -915,7 +945,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 		} else if(strcmp(&(input_paths[i][input_path_len - 6]), ".jsonl") == 0){
 			current_file_format = JSONL;
 			printf("JSONL: %s\n", input_paths[i]);
-			if(create_jsonl_document_iterator(&jdi, input_paths[i]) != 0){
+			if(create_jsonl_document_iterator(&jdi, input_paths[i], JSONL_CONTENT_KEY) != 0){
 				perror("failed to call create_jsonl_document_iterator\n");
 				return 1;
 			}
@@ -1248,6 +1278,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 							ENABLE_GOOD_ENTROPY,
 							ENABLE_RENYI_ENTROPY,
 							ENABLE_PATIL_TAILLIE_ENTROPY,
+							ENABLE_Q_LOGARITHMIC_ENTROPY,
 							ENABLE_SIMPSON_INDEX,
 							ENABLE_SIMPSON_DOMINANCE_INDEX,
 							ENABLE_HILL_NUMBER_STANDARD,
@@ -1269,6 +1300,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 							ENABLE_SW_E_MCI_PIELOU1969,
 							ENABLE_SW_E_PRIME_CAMARGO1993,
 							ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL,
+							ENABLE_NHC_E_Q,
 							ENABLE_TIMINGS,
 							ENABLE_ITERATIVE_DISTANCE_COMPUTATION,
 							ENABLE_MULTITHREADED_ROW_GENERATION,
@@ -1348,6 +1380,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 						ENABLE_GOOD_ENTROPY,
 						ENABLE_RENYI_ENTROPY,
 						ENABLE_PATIL_TAILLIE_ENTROPY,
+						ENABLE_Q_LOGARITHMIC_ENTROPY,
 						ENABLE_SIMPSON_INDEX,
 						ENABLE_SIMPSON_DOMINANCE_INDEX,
 						ENABLE_HILL_NUMBER_STANDARD,
@@ -1369,6 +1402,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 						ENABLE_SW_E_MCI_PIELOU1969,
 						ENABLE_SW_E_PRIME_CAMARGO1993,
 						ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL,
+						ENABLE_NHC_E_Q,
 						ENABLE_TIMINGS,
 						ENABLE_ITERATIVE_DISTANCE_COMPUTATION,
 						ENABLE_MULTITHREADED_ROW_GENERATION,
@@ -1475,6 +1509,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 							ENABLE_GOOD_ENTROPY,
 							ENABLE_RENYI_ENTROPY,
 							ENABLE_PATIL_TAILLIE_ENTROPY,
+							ENABLE_Q_LOGARITHMIC_ENTROPY,
 							ENABLE_SIMPSON_INDEX,
 							ENABLE_SIMPSON_DOMINANCE_INDEX,
 							ENABLE_HILL_NUMBER_STANDARD,
@@ -1496,6 +1531,7 @@ int32_t measurement_from_cfg(const struct cfg* const config){
 							ENABLE_SW_E_MCI_PIELOU1969,
 							ENABLE_SW_E_PRIME_CAMARGO1993,
 							ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL,
+							ENABLE_NHC_E_Q,
 							ENABLE_TIMINGS,
 							ENABLE_ITERATIVE_DISTANCE_COMPUTATION,
 							ENABLE_MULTITHREADED_ROW_GENERATION,
