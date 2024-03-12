@@ -14,10 +14,13 @@ CC = gcc
 #CC = clang
 CFLAGS_PEDANTIC = -std=c99 -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic
 CFLAGS_STANDARD = -std=c99 -Wall -Wextra -Wformat -Wformat-security
+CFLAGS_TEST = -std=c99 -Wall -Wextra -Wformat -Wformat-security
 CFLAGS_COVERAGE = -std=c99 -Wall -Wextra -Wformat -Wformat-security --coverage
 CFLAGS_PROFILING = -std=c99 -Wall -Wextra -Wformat -Wformat-security -pg -g
 CPPFLAGS = -Isrc/include
+CPPFLAGS_TEST = -Isrc/include -Itest/include 
 OPT_LEVEL = -O3
+OPT_LEVEL_TEST = -O2
 PYTHON_INCLUDE_FLAG = -I/home/esteve/.local/conda/include/python3.11
 LINKER_FLAGS = -lm -pthread
 
@@ -105,4 +108,29 @@ measurement_profiling:
 
 measurement_python_interface:
 	$(CC) --version
-	$(CC) $(CFLAGS_PROFILING) $(CPPFLAGS) $(OPT_LEVEL) $(PYTHON_INCLUDE_FLAG) -shared -fPIC -o diversutils.so src/diversutilsmodule.c $(LINKER_FLAGS)
+	$(CC) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(PYTHON_INCLUDE_FLAG) -shared -fPIC -o diversutils.so src/diversutilsmodule.c $(LINKER_FLAGS)
+
+test_graph_relative_proportion:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c -lm -pthread
+
+test_entropy_shannon_weaver:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c -lm -pthread
+
+test_entropy_renyi:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c -lm -pthread
+
+test_entropy_patil_taillie:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c -lm -pthread
+
+test_entropy_q_logarithmic:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c -lm -pthread
+
+test_equivalence_entropy:
+	$(CC) --version
+	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c -lm -pthread
+

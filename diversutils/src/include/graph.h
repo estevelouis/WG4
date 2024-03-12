@@ -310,6 +310,7 @@ struct graph {
 	uint64_t num_nodes;
 	uint64_t capacity;
 	pthread_mutex_t mutex_nodes;
+	int16_t num_dimensions;
 };
 
 int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const int16_t num_dimensions, const int8_t fp_mode){
@@ -320,6 +321,7 @@ int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const in
 	g->nodes = (struct graph_node*) malloc_pointer;
 	g->num_nodes = num_nodes;
 	g->capacity = num_nodes;
+	g->num_dimensions = num_dimensions;
 	pthread_mutex_init(&g->mutex_nodes, NULL);
 
 	double relative_proportion_sum = 0.0;
@@ -381,6 +383,16 @@ int32_t create_graph_empty(struct graph* restrict g){
 	}
 
 	return 0;
+}
+
+void compute_graph_relative_proportions(struct graph* const g){
+	uint64_t sum = 0;
+	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
+		sum += g->nodes[i].absolute_proportion;
+	}
+	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
+		g->nodes[i].relative_proportion = ((double) g->nodes[i].absolute_proportion) / ((double) sum);
+	}
 }
 
 struct word2vec_entry {
@@ -832,7 +844,7 @@ void pop_graph_distance_min_heap(struct graph_distance_heap* restrict heap, cons
 	}
 }
 
-inline int32_t pop_graph_distance_heap(struct graph_distance_heap* heap, const int32_t direction, const int32_t current_index){
+int32_t pop_graph_distance_heap(struct graph_distance_heap* heap, const int32_t direction, const int32_t current_index){
 	if(direction == MIN_HEAP){
 		pop_graph_distance_min_heap(heap, current_index);
 	} else if(direction == MAX_HEAP){
@@ -1719,14 +1731,14 @@ inline void distance_row_from_graph(const struct graph* restrict g, const int32_
 	}
 }
 
-int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector, const int16_t NUM_ROW_THREADS){
-	pthread_t threads[NUM_ROW_THREADS];
-	struct row_thread_arg args[NUM_ROW_THREADS];
+int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector, const int16_t num_row_threads){
+	pthread_t threads[num_row_threads];
+	struct row_thread_arg args[num_row_threads];
 	uint64_t start_j = 0;
 	uint64_t end_j;
-	for(int16_t k = 0 ; k < NUM_ROW_THREADS ; k++){
-		end_j = start_j + floor(g->num_nodes / NUM_ROW_THREADS);
-		if(((uint64_t) k) < g->num_nodes % ((uint64_t) NUM_ROW_THREADS)){
+	for(int16_t k = 0 ; k < num_row_threads ; k++){
+		end_j = start_j + floor(g->num_nodes / num_row_threads);
+		if(((uint64_t) k) < g->num_nodes % ((uint64_t) num_row_threads)){
 			end_j++;
 		}
 		args[k].i = i;
@@ -1741,7 +1753,7 @@ int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_
 		start_j = end_j;
 	}
 
-	for(int16_t i = 0 ; i < NUM_ROW_THREADS ; i++){
+	for(int16_t i = 0 ; i < num_row_threads ; i++){
 		if(pthread_join(threads[i], NULL) != 0){
 			perror("failed to join matrix thread\n");
 			return 1;
@@ -1788,7 +1800,7 @@ void* matrix_thread(void* args){
 	return NULL;
 }
 
-int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m, const int16_t NUM_MATRIX_THREADS){
+int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m, const int16_t num_matrix_threads){
 	if(m->a != m->b){
 		perror("m->a != m->b\n");
 		return 1;
@@ -1798,11 +1810,11 @@ int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m
 		return 1;
 	}
 	
-	pthread_t threads[NUM_MATRIX_THREADS];
-	struct matrix_thread_arg args[NUM_MATRIX_THREADS];
-	for(int32_t i = 0 ; i < NUM_MATRIX_THREADS ; i++){
+	pthread_t threads[num_matrix_threads];
+	struct matrix_thread_arg args[num_matrix_threads];
+	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
 		args[i].thread_rank = i;
-		args[i].thread_total_count = NUM_MATRIX_THREADS;
+		args[i].thread_total_count = num_matrix_threads;
 		args[i].m = m;
 		args[i].g = g;
 		if(pthread_create(&(threads[i]), NULL, matrix_thread, &(args[i])) != 0){
@@ -1811,7 +1823,7 @@ int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m
 		}
 	}
 
-	for(int32_t i = 0 ; i < NUM_MATRIX_THREADS ; i++){
+	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
 		if(pthread_join(threads[i], NULL) != 0){
 			perror("failed to join matrix thread\n");
 			return 1;
@@ -2548,6 +2560,87 @@ int32_t scheiner_species_phylogenetic_functional_diversity_from_graph(struct gra
 	(*hill_result) = (double) hill_number;
 
 	free(vector);
+
+	return 0;
+}
+
+int32_t nhc_e_q_from_graph(struct graph* const g, double* const res_nhc, double* const res_e_q){
+	size_t alloc_size = g->num_nodes * sizeof(double);
+	double* proportions = malloc(alloc_size);
+	if(proportions == NULL){
+		perror("malloc failed\n");
+		return 1;
+	}
+	for(uint32_t i = 0 ; i < g->num_nodes ; i++){
+		proportions[i] = (double) g->nodes[i].absolute_proportion; // abundances, not relative
+	}
+
+	qsort(proportions, g->num_nodes, sizeof(double), double_cmp);
+
+	// reverse order
+	for(uint32_t i = 0 ; i < floor(((double) g->num_nodes) / 2.0) ; i++){
+		double placeholder = proportions[i];
+		proportions[i] = proportions[g->num_nodes - 1 - i];
+		proportions[g->num_nodes - 1 - i] = placeholder;
+	}
+
+	for(uint32_t i = 0 ; i < g->num_nodes ; i++){
+		proportions[i] = log(proportions[i]);
+	}
+
+	double diff_min_max = 100.0;
+	const double update_divider = 10.0;
+	double min_b = -diff_min_max;
+	double max_b = 0.0;
+	double min_b_prime = -diff_min_max;
+	double max_b_prime = diff_min_max;
+	const uint32_t total_subiter = 32;
+	const uint32_t total_iter = 8;
+	double least_mse = 0.0;
+	double best_b = 0.0;
+	double least_mse_prime = 0.0;
+	double best_b_prime = 0.0;
+	for(uint32_t current_iter = 0 ; current_iter < total_iter ; current_iter++){
+		least_mse = 0.0;
+		best_b = 0.0;
+		least_mse_prime = 0.0;
+		best_b_prime = 0.0;
+		for(uint32_t current_subiter = 0 ; current_subiter < total_subiter ; current_subiter++){
+			double b = min_b + (max_b - min_b) * (((double) current_subiter) / ((double) (total_subiter-1)));
+			double mse = 0.0;
+			double b_prime = min_b_prime + (max_b_prime - min_b_prime) * (((double) current_subiter) / ((double) (total_subiter-1)));
+			double mse_prime = 0.0;
+			for(uint32_t i = 0 ; i < g->num_nodes ; i++){
+				double rank = ((double) i) + 1.0;
+				double real_value = proportions[i] / rank; // log of abundance on rank of abundance
+				double prediction = b * rank;
+				mse += pow(real_value - prediction, 2.0);
+
+				double rank_scaled = rank / ((double) g->num_nodes);
+				double real_value_prime = rank_scaled / proportions[i]; // scaled rank over log of abundance
+				double prediction_prime = b_prime * rank;
+				mse_prime += pow(real_value_prime - prediction_prime, 2.0);
+			}
+			if(current_subiter == 0 || mse < least_mse){
+				least_mse = mse;
+				best_b = b;
+			}
+			if(current_subiter == 0 || mse_prime < least_mse_prime){
+				least_mse_prime = mse_prime;
+				best_b_prime = b_prime;
+			}
+		}
+		diff_min_max /= update_divider;
+		min_b = best_b - diff_min_max / 2.0;
+		max_b = best_b + diff_min_max / 2.0;
+		min_b_prime = best_b_prime - diff_min_max / 2.0;
+		max_b_prime = best_b_prime + diff_min_max / 2.0;
+	}
+
+	(*res_nhc) = best_b;
+	(*res_e_q) = -(2.0/PI) * atan(best_b_prime);
+
+	free(proportions);
 
 	return 0;
 }

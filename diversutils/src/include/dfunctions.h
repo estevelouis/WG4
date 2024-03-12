@@ -36,13 +36,22 @@
 
 #define LOGARITHMIC_BASE E
 
-void shannon_weaver_entropy_from_graph(const struct graph* const g, double* res){
+double q_logarithm(double x, double q){
+	if(q == 1.0){
+		return log(x);
+	} else {
+		return (pow(x, 1.0 - q) - 1) / (1.0 - q);
+	}
+}
+
+void shannon_weaver_entropy_from_graph(const struct graph* const g, double* res_entropy, double* res_hill_number){
 	double loc_res = 0.0;
 	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
 		loc_res += g->nodes[i].relative_proportion * (log(g->nodes[i].relative_proportion) / log(LOGARITHMIC_BASE));
 	}
 	loc_res *= -1.0;
-	(*res) = loc_res;
+	(*res_entropy) = loc_res;
+	(*res_hill_number) = pow(LOGARITHMIC_BASE, loc_res);
 }
 
 void good_entropy_from_graph(const struct graph* const g, double* res, double alpha, double beta){
@@ -53,29 +62,44 @@ void good_entropy_from_graph(const struct graph* const g, double* res, double al
 	(*res) = loc_res;
 }
 
-void renyi_entropy_from_graph(const struct graph* const g, double* res, double alpha){
+void renyi_entropy_from_graph(const struct graph* const g, double* res_entropy, double* res_hill_number, double alpha){
 	if(alpha == 1.0){
-		shannon_weaver_entropy_from_graph(g, res);
+		shannon_weaver_entropy_from_graph(g, res_entropy, res_hill_number);
 	} else {
 		double loc_res = 0.0;
 		for(uint64_t i = 0 ; i < g->num_nodes ; i++){
 			loc_res += pow(g->nodes[i].relative_proportion, alpha);
 		}
 		loc_res = (1.0 / (1.0 - alpha)) * (log(loc_res) / log(LOGARITHMIC_BASE));
-		(*res) = loc_res;
+		(*res_entropy) = loc_res;
+		(*res_hill_number) = pow(LOGARITHMIC_BASE, loc_res);
 	}
 }
 
-void patil_taillie_entropy_from_graph(const struct graph* const g, double* res, double alpha){
+void patil_taillie_entropy_from_graph(const struct graph* const g, double* res_entropy, double* res_hill_number, double alpha){
 	if(alpha == 0.0){
-		shannon_weaver_entropy_from_graph(g, res);
+		shannon_weaver_entropy_from_graph(g, res_entropy, res_hill_number);
 	} else {
-		double loc_res = 0.0;
+		double loc_res = 1.0;
 		for(uint64_t i = 0 ; i < g->num_nodes ; i++){
 			loc_res -= pow(g->nodes[i].relative_proportion, alpha + 1.0);
 		}
 		loc_res /= alpha;
-		(*res) = loc_res;
+		(*res_entropy) = loc_res;
+		(*res_hill_number) = 1.0 / pow(1.0 - (alpha * loc_res), 1.0 / alpha);
+	}
+}
+
+void q_logarithmic_entropy_from_graph(const struct graph* const g, double* res_entropy, double* res_hill_number, double q){
+	double loc_res = 0.0;
+	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
+		loc_res += g->nodes[i].relative_proportion * q_logarithm(1.0 / g->nodes[i].relative_proportion, q);
+	}
+	(*res_entropy) = loc_res;
+	if(q == 1.0){
+		(*res_hill_number) = pow(LOGARITHMIC_BASE, loc_res); // ?
+	} else {
+		(*res_hill_number) = pow(1.0 - (q - 1.0) * loc_res, 1.0 / (1.0 - q));
 	}
 }
 
@@ -103,8 +127,9 @@ void species_count_from_graph(const struct graph* const g, double* res){
 
 void hill_number_standard_from_graph(const struct graph* const g, double* res, double alpha){
 	double renyi_entropy;
-	renyi_entropy_from_graph(g, &renyi_entropy, alpha);
-	(*res) = pow(LOGARITHMIC_BASE, renyi_entropy);
+	double hill_number;
+	renyi_entropy_from_graph(g, &renyi_entropy, &hill_number, alpha);
+	(*res) = hill_number;
 }
 
 void hill_evenness_from_graph(const struct graph* const g, double* res, double alpha, double beta){
@@ -127,7 +152,8 @@ void berger_parker_index_from_graph(const struct graph* const g, double* res){
 
 void shannon_evenness_from_graph(const struct graph* const g, double* res){
 	double sw_entropy;
-	shannon_weaver_entropy_from_graph(g, &sw_entropy);
+	double hill_number;
+	shannon_weaver_entropy_from_graph(g, &sw_entropy, &hill_number);
 	double max_entropy = log((double) g->num_nodes) / log(LOGARITHMIC_BASE);
 	(*res) = sw_entropy / max_entropy;
 }
@@ -183,7 +209,8 @@ void sw_entropy_over_log_n_species_pielou1975_from_graph(const struct graph* con
 
 void sw_e_heip_from_graph(const struct graph* const g, double* res){
 	double sw_entropy;
-	shannon_weaver_entropy_from_graph(g, &sw_entropy);
+	double hill_number;
+	shannon_weaver_entropy_from_graph(g, &sw_entropy, &hill_number);
 	(*res) = (pow(E, sw_entropy) - 1.0) / ((double) (g->num_nodes - 1));
 }
 
@@ -209,7 +236,8 @@ void sw_f_2_1_alatalo1981_from_graph(const struct graph* const g, double* res){
 	double dom_index;
 	simpson_dominance_index_from_graph(g, &dom_index);
 	double sw_entropy;
-	shannon_weaver_entropy_from_graph(g, &sw_entropy);
+	double hill_number;
+	shannon_weaver_entropy_from_graph(g, &sw_entropy, &hill_number);
 	(*res) = ((1.0 / dom_index) - 1.0) / (pow(LOGARITHMIC_BASE, sw_entropy) - 1.0);
 }
 
