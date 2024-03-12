@@ -133,11 +133,12 @@ struct jsonl_document_iterator {
 	int8_t file_is_open;
 	int8_t file_is_done;
 	char bfr_read[JSONL_FILE_READ_BUFFER_SIZE];
+	char content_key[JSONL_CONTENT_KEY_BUFFER_SIZE];
 	struct document current_document;
 	int32_t document_to_free;
 };
 
-int32_t create_jsonl_document_iterator(struct jsonl_document_iterator* jdi, const char* file_name){
+int32_t create_jsonl_document_iterator(struct jsonl_document_iterator* jdi, const char* file_name, const char* const content_key){
 	jdi->file_ptr = fopen(file_name, "r");
 	if(jdi->file_ptr == NULL){
 		fprintf(stderr, "[err] failed to open file (%s); errno: %i\n", file_name, errno);
@@ -146,6 +147,12 @@ int32_t create_jsonl_document_iterator(struct jsonl_document_iterator* jdi, cons
 	jdi->file_is_open = 1;
 	jdi->file_is_done = 0;
 	memset(jdi->bfr_read, '\0', JSONL_FILE_READ_BUFFER_SIZE);
+	memset(jdi->content_key, '\0', JSONL_CONTENT_KEY_BUFFER_SIZE);
+	size_t bytes_to_cpy = strlen(content_key);
+	if(bytes_to_cpy > JSONL_CONTENT_KEY_BUFFER_SIZE - 1){
+		bytes_to_cpy = JSONL_CONTENT_KEY_BUFFER_SIZE - 1;
+	}
+	memcpy(jdi->content_key, content_key, bytes_to_cpy);
 
 	memset(&(jdi->current_document), '\0', sizeof(struct document));
 
@@ -330,7 +337,7 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 								jdi->current_document.identifier[value_size] = '\0';
 								jdi->current_document.identifier_size = value_size;
 								jdi->current_document.identifier_capacity = value_size + 1;
-							} else if(strcmp(key, "text") == 0){
+							} else if(strcmp(key, jdi->content_key) == 0){
 								jdi->current_document.text = realloc(jdi->current_document.text, value_size + 1);
 								memcpy(jdi->current_document.text, value, value_size);
 								jdi->current_document.text[value_size] = '\0';
@@ -391,7 +398,7 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 					jdi->current_document.identifier[value_size] = '\0';
 					jdi->current_document.identifier_size = value_size;
 					jdi->current_document.identifier_capacity = value_size + 1;
-				} else if(strcmp(key, "text") == 0){
+				} else if(strcmp(key, jdi->content_key) == 0){
 					jdi->current_document.text = realloc(jdi->current_document.text, value_size + 1);
 					memcpy(jdi->current_document.text, value, value_size);
 					jdi->current_document.text[value_size] = '\0';
