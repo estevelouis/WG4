@@ -40,11 +40,33 @@ enum {
 	ID_ENTROPY_PATIL_TAILLIE,
 	ID_ENTROPY_RENYI,
 	ID_ENTROPY_GOOD,
+	ID_INDEX_SIMPSON_DOMINANCE,
+	ID_INDEX_SIMPSON,
+	ID_INDEX_RICHNESS,
+	ID_INDEX_SPECIES_COUNT,
+	ID_INDEX_HILL_EVENNESS,
+	ID_INDEX_SHANNON_EVENNESS,
+	ID_INDEX_JUNGE1994_PAGE22,
+	ID_INDEX_BRILLOUIN,
+	ID_INDEX_MCINTOSH,
+	ID_INDEX_E_HEIP,
+	ID_INDEX_ONE_MINUS_D,
+	ID_INDEX_ONE_OVER_D_WILLIAMS1964,
+	ID_INDEX_E_MINUS_LN_D_PIELOU1977,
+	ID_INDEX_F_2_1_ALATALO1981,
+	ID_INDEX_G_2_1_MOLINARI1989,
+	ID_INDEX_O_BULLA1994,
+	ID_INDEX_E_BULLA1994,
+	ID_INDEX_E_MCI_PIELOU1969,
+	ID_INDEX_E_PRIME_CAMARGO1993,
+	ID_INDEX_E_VAR_SMITH_AND_WILSON1996,
+	ID_PAIRWISE,
 };
 
 static uint32_t num_graphs = 0;
 static struct graph* global_graphs = NULL;
 static uint8_t* global_graphs_freed = NULL;
+static struct word2vec* global_word2vecs = NULL;
 static struct cfg* configurations = NULL;
 
 static PyObject* interface_measurement_from_cfg(PyObject* self, PyObject* args){
@@ -90,6 +112,11 @@ static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
 
+	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
+	global_word2vecs = realloc(global_word2vecs, alloc_size);
+	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
+
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
 	configurations = realloc(configurations, alloc_size);
 	if(configurations == NULL){perror("failed to realloc\n"); goto exit_failure;}
@@ -131,6 +158,11 @@ static PyObject* interface_create_graph(PyObject* self, PyObject* args){
 	global_graphs_freed = realloc(global_graphs_freed, alloc_size);
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
+
+	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
+	global_word2vecs = realloc(global_word2vecs, alloc_size);
+	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
 
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
 	configurations = realloc(configurations, alloc_size);
@@ -176,6 +208,7 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 
 	if(global_graphs_freed[index] == 0){
 		free_graph(&(global_graphs[index]));
+		free_word2vec(&(global_word2vecs[index]));
 		free_cfg(&(configurations[index]));
 		global_graphs_freed[index] = 1;
 	} else {
@@ -187,11 +220,11 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 	return res;
 }
 
-static PyObject* interface_add_node(PyObject* self, PyObject* args){
+static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
 	int32_t index;
-	int32_t absolute_proportion;
+	unsigned char* w2v_path;
 
-	if(!PyArg_ParseTuple(args, "ii", &index, &absolute_proportion)){
+	if(!PyArg_ParseTuple(args, "is", &index, &w2v_path)){
 		return NULL;
 	}
 
@@ -204,10 +237,26 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 		return NULL;
 	}
 
-	if(absolute_proportion < 0){
-		perror("absolute proportion cannot be negative\n");
+	if(load_word2vec_binary(&(global_word2vecs[index]), w2v_path) != 0){
+		perror("failed to call load_word2vec_binary\n");
 		return NULL;
 	}
+
+	return Py_BuildValue("i", 0);
+}
+
+static PyObject* interface_add_node(PyObject* self, PyObject* args){
+	int32_t index;
+	int32_t absolute_proportion;
+	char* key;
+	int32_t w2v_index;
+
+	key = NULL;
+
+	if(!PyArg_ParseTuple(args, "ii|s", &index, &absolute_proportion, &key)){return NULL;}
+	if(index < 0){perror("index must be >= 0\n"); return NULL;}
+	if(((uint32_t) index) >= num_graphs){perror("index too high\n"); return NULL;}
+	if(absolute_proportion < 0){perror("absolute proportion cannot be negative\n"); return NULL;}
 
 	if(global_graphs[index].num_nodes == global_graphs[index].capacity){
 		if(request_more_capacity_graph(&(global_graphs[index])) != 0){
@@ -221,6 +270,18 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 		return NULL;
 	}
 	global_graphs[index].nodes[global_graphs[index].num_nodes].absolute_proportion = (uint32_t) absolute_proportion;
+
+	if(key != NULL){
+		w2v_index = word2vec_key_to_index(&(global_word2vecs[index]), key);
+		if(w2v_index == -1){
+			fprintf(stdout, "unknown key: %s\n", key);
+			return NULL;
+		}
+		global_graphs[index].nodes[global_graphs[index].num_nodes].word2vec_entry_pointer = &(global_word2vecs[index].keys[w2v_index]);
+		global_graphs[index].nodes[global_graphs[index].num_nodes].vector.fp32 = global_word2vecs[index].keys[w2v_index].vector;
+		global_graphs[index].nodes[global_graphs[index].num_nodes].num_dimensions = global_graphs[index].num_dimensions;
+	}
+
 	global_graphs[index].num_nodes++;
 
 	PyObject* res = Py_BuildValue("i", 0);
@@ -286,6 +347,69 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 		case ID_ENTROPY_GOOD:
 			good_entropy_from_graph(&(global_graphs[index]), &res1, alpha, beta);
 			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SIMPSON_DOMINANCE:
+			simpson_dominance_index_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SIMPSON:
+			simpson_index_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_RICHNESS:
+			richness_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SPECIES_COUNT:
+			species_count_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_HILL_EVENNESS:
+			hill_evenness_from_graph(&(global_graphs[index]), &res1, alpha, beta);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SHANNON_EVENNESS:
+			shannon_evenness_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_JUNGE1994_PAGE22:
+			junge1994_page22_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_BRILLOUIN:
+			brillouin_diversity_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_MCINTOSH:
+			mcintosh_index_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_HEIP:
+			sw_e_heip_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_ONE_MINUS_D:
+			sw_e_one_minus_D_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_ONE_OVER_D_WILLIAMS1964:
+			sw_e_one_over_D_williams1964_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_MINUS_LN_D_PIELOU1977:
+			sw_e_minus_ln_D_pielou1977_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_F_2_1_ALATALO1981:
+			sw_f_2_1_alatalo1981_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_G_2_1_MOLINARI1989:
+			sw_g_2_1_molinari1989_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_O_BULLA1994:
+			sw_o_bulla1994_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_BULLA1994:
+			sw_e_bulla1994_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_MCI_PIELOU1969:
+			sw_e_mci_pielou1969_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_PRIME_CAMARGO1993:
+			sw_e_prime_camargo1993_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_VAR_SMITH_AND_WILSON1996:
+			sw_e_var_smith_and_wilson1996_original_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_PAIRWISE:
+			pairwise_from_graph(&(global_graphs[index]), &res1, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
 		default:
 			perror("unknown diversity function\n");
 			return NULL;
@@ -329,6 +453,7 @@ static PyMethodDef diversutilsmethods[] = {
 	{"add_node", interface_add_node, METH_VARARGS, "Add a node (args: graph index, number of dimensions, absolute proportion)."},
 	{"individual_measure", interface_individual_measure, METH_VARARGS, "Compute an individual measure. ARGS: graph index, measure index, order 1 (optional), order 2 (optional)."},
 	{"compute_relative_proportion", interface_compute_relative_proportions, METH_VARARGS, "Compute relative proportions. ARGS: graph index."},
+	{"bind_w2v", interface_bind_w2v, METH_VARARGS, "Bind a Word2Vec binary to a graph.. ARGS: graph index, Word2Vec binary path."},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -346,10 +471,31 @@ static struct PyModuleDef diversutilsmodule = {
 
 PyMODINIT_FUNC PyInit_diversutils(void){
 	PyObject* mod = PyModule_Create(&diversutilsmodule);
-	PyModule_AddIntConstant(mod, "ENTROPY_SHANNON_WEAVER", ID_ENTROPY_SHANNON_WEAVER);
-	PyModule_AddIntConstant(mod, "ENTROPY_Q_LOGARITHMIC", ID_ENTROPY_Q_LOGARITHMIC);
-	PyModule_AddIntConstant(mod, "ENTROPY_PATIL_TAILLIE", ID_ENTROPY_PATIL_TAILLIE);
-	PyModule_AddIntConstant(mod, "ENTROPY_RENYI", ID_ENTROPY_RENYI);
-	PyModule_AddIntConstant(mod, "ENTROPY_GOOD", ID_ENTROPY_GOOD);
+	PyModule_AddIntConstant(mod, "DF_ENTROPY_SHANNON_WEAVER", ID_ENTROPY_SHANNON_WEAVER);
+	PyModule_AddIntConstant(mod, "DF_ENTROPY_Q_LOGARITHMIC", ID_ENTROPY_Q_LOGARITHMIC);
+	PyModule_AddIntConstant(mod, "DF_ENTROPY_PATIL_TAILLIE", ID_ENTROPY_PATIL_TAILLIE);
+	PyModule_AddIntConstant(mod, "DF_ENTROPY_RENYI", ID_ENTROPY_RENYI);
+	PyModule_AddIntConstant(mod, "DF_ENTROPY_GOOD", ID_ENTROPY_GOOD);
+	PyModule_AddIntConstant(mod, "DF_PAIRWISE", ID_PAIRWISE);
+	PyModule_AddIntConstant(mod, "DF_INDEX_SIMPSON_DOMINANCE", ID_INDEX_SIMPSON_DOMINANCE);
+	PyModule_AddIntConstant(mod, "DF_INDEX_SIMPSON", ID_INDEX_SIMPSON);
+	PyModule_AddIntConstant(mod, "DF_INDEX_RICHNESS", ID_INDEX_RICHNESS);
+	PyModule_AddIntConstant(mod, "DF_INDEX_SPECIES_COUNT", ID_INDEX_SPECIES_COUNT);
+	PyModule_AddIntConstant(mod, "DF_INDEX_HILL_EVENNESS", ID_INDEX_HILL_EVENNESS);
+	PyModule_AddIntConstant(mod, "DF_INDEX_SHANNON_EVENNESS", ID_INDEX_SHANNON_EVENNESS);
+	PyModule_AddIntConstant(mod, "DF_INDEX_JUNGE1994_PAGE22", ID_INDEX_JUNGE1994_PAGE22);
+	PyModule_AddIntConstant(mod, "DF_INDEX_BRILLOUIN", ID_INDEX_BRILLOUIN);
+	PyModule_AddIntConstant(mod, "DF_INDEX_MCINTOSH", ID_INDEX_MCINTOSH);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_HEIP", ID_INDEX_E_HEIP);
+	PyModule_AddIntConstant(mod, "DF_INDEX_ONE_MINUS_D", ID_INDEX_ONE_MINUS_D);
+	PyModule_AddIntConstant(mod, "DF_INDEX_ONE_OVER_D_WILLIAMS1964", ID_INDEX_ONE_OVER_D_WILLIAMS1964);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_MINUS_LN_D_PIELOU1977", ID_INDEX_E_MINUS_LN_D_PIELOU1977);
+	PyModule_AddIntConstant(mod, "DF_INDEX_F_2_1_ALATALO1981", ID_INDEX_F_2_1_ALATALO1981);
+	PyModule_AddIntConstant(mod, "DF_INDEX_G_2_1_MOLINARI1989", ID_INDEX_G_2_1_MOLINARI1989);
+	PyModule_AddIntConstant(mod, "DF_INDEX_O_BULLA1994", ID_INDEX_O_BULLA1994);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_BULLA1994", ID_INDEX_E_BULLA1994);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_MCI_PIELOU1969", ID_INDEX_E_MCI_PIELOU1969);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_PRIME_CAMARGO1993", ID_INDEX_E_PRIME_CAMARGO1993);
+	PyModule_AddIntConstant(mod, "DF_INDEX_E_VAR_SMITH_AND_WILSON1996", ID_INDEX_E_VAR_SMITH_AND_WILSON1996);
 	return mod;
 }

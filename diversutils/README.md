@@ -57,8 +57,8 @@ diversutils.add_node(graph_index, 5)
 diversutils.compute_relative_proportion(graph_index)
 
 # Compute diversities that you need
-entropy, hill_number = diversutils.individual_measure(graph_index, diversutils.ENTROPY_SHANNON_WEAVER)
-entropy, hill_number = diversutils.individual_measure(graph_index, diversutils.ENTROPY_RENYI, 2.0)
+entropy, hill_number = diversutils.individual_measure(graph_index, diversutils.DF_ENTROPY_SHANNON_WEAVER)
+entropy, hill_number = diversutils.individual_measure(graph_index, diversutils.DF_ENTROPY_RENYI, 2.0)
 
 # Free the underlying graph
 diversutils.free_graph(graph_index)

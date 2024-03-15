@@ -43,11 +43,11 @@
 
 /*
 #ifndef NUM_MATRIX_THREADS
-#define NUM_MATRIX_THREADS 32
+#define NUM_MATRIX_THREADS 4
 #endif
 
 #ifndef NUM_ROW_THREADS
-#define NUM_ROW_THREADS 32
+#define NUM_ROW_THREADS 4
 #endif
 */
 
@@ -73,6 +73,28 @@ enum {
 };
 #endif
 
+struct graph_neighbour {
+	float distance;
+	uint64_t index;
+};
+
+struct graph_node {
+	uint16_t num_dimensions;
+	uint8_t already_considered;
+	double relative_proportion;
+	uint32_t absolute_proportion;
+	struct word2vec_entry* word2vec_entry_pointer;
+	struct graph_neighbour* neighbours;
+	uint32_t capacity_neighbours;
+	uint32_t num_neighbours;
+	pthread_mutex_t mutex_local_node;
+	union {
+		float* fp32;
+		double* fp64;
+	} vector;
+};
+
+
 struct matrix {
 	uint32_t a;
 	uint32_t b;
@@ -83,8 +105,275 @@ struct matrix {
 	uint8_t fp_mode;
 	uint8_t* active;
 	uint8_t* active_final;
+	uint8_t to_free;
 };
 
+#define GRAPH_CAPACITY_STEP 64
+
+struct graph {
+	struct graph_node* nodes;
+	uint64_t num_nodes;
+	uint64_t capacity;
+	pthread_mutex_t mutex_nodes;
+	int16_t num_dimensions;
+	// float* dist_mat;
+	struct matrix dist_mat;
+};
+
+int32_t create_matrix(struct matrix* m, uint32_t a, uint32_t b, int8_t fp_mode){
+	printf("create_matrix: %u %u\n", a, b);
+	m->a = a;
+	m->b = b;
+	size_t malloc_size = ((size_t) a) * ((size_t) b);
+	switch(fp_mode){
+		case FP32:
+			malloc_size *= sizeof(float);
+			break;
+		case FP64:
+			malloc_size *= sizeof(double);
+			break;
+		default:
+			return 1;
+	}
+
+	void* malloc_pointer;
+
+
+	malloc_pointer = malloc(malloc_size);
+	if(malloc_pointer == NULL){goto malloc_failure;}
+	memset(malloc_pointer, '\0', malloc_size);
+	switch(fp_mode){
+		case FP32:
+			m->bfr.fp32 = (float*) malloc_pointer;
+			break;
+		case FP64:
+			m->bfr.fp64 = (double*) malloc_pointer;
+			break;
+	}
+
+	malloc_size = a * b * sizeof(int8_t);
+	malloc_pointer = malloc(malloc_size);
+	if(malloc_pointer == NULL){
+		switch(fp_mode){
+			case FP32:
+				free(m->bfr.fp32);
+				break;
+			case FP64:
+				free(m->bfr.fp64);
+				break;
+		}
+		goto malloc_failure;
+	}
+	memset(malloc_pointer, '\0', malloc_size);
+	m->active = (uint8_t*) malloc_pointer;
+
+	malloc_pointer = malloc(malloc_size);
+	if(malloc_pointer == NULL){
+		switch(fp_mode){
+			case FP32:
+				free(m->bfr.fp32);
+				break;
+			case FP64:
+				free(m->bfr.fp64);
+				break;
+		}
+		goto malloc_failure;
+	}
+	memset(malloc_pointer, '\0', malloc_size);
+	m->active_final = (uint8_t*) malloc_pointer;
+
+	m->fp_mode = fp_mode;
+
+	m->to_free = 1;
+
+	return 0;
+
+	malloc_failure:
+	fprintf(stderr, "Failed to malloc %li bytes\n", malloc_size);
+	return 1;
+}
+
+int32_t distance_matrix_from_graph(const struct graph* restrict g, struct matrix* restrict m){
+	if(m->a != m->b){
+		perror("m->a != m->b\n");
+		return 1;
+	}
+	if(((uint32_t) g->num_nodes) != m->a){
+		perror("g->num_nodes != m->a\n");
+		return 1;
+	}
+
+	for(uint64_t i = 0 ; i < m->a ; i++){
+		switch(m->fp_mode){
+			case FP32:
+				m->bfr.fp32[i * m->b + i] = 0.0f;
+				break;
+			case FP64:
+				m->bfr.fp64[i * m->b + i] = 0.0;
+				break;
+		}
+		for(uint64_t j = i + 1 ; j < m->b ; j++){
+			switch(m->fp_mode){
+				case FP32:
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
+					break;
+				case FP64:
+					m->bfr.fp64[i * m->b + j] = (double) cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
+					m->bfr.fp64[j * m->b + i] = m->bfr.fp64[i * m->b + j];
+					break;
+			}
+		}
+	}	
+
+	return 0;
+}
+
+struct row_thread_arg {
+	float* vector;
+	const struct graph* g;
+	uint64_t i;
+	uint64_t start_j;
+	uint64_t end_j;
+};
+
+void* row_thread(void* args){
+	float* vector = (((struct row_thread_arg*) args)->vector);
+	const struct graph* g = (((struct row_thread_arg*) args)->g);
+	uint64_t i = ((struct row_thread_arg*) args)->i;
+	uint64_t start_j = ((struct row_thread_arg*) args)->start_j;
+	uint64_t end_j = ((struct row_thread_arg*) args)->end_j;
+
+	for(uint64_t j = start_j ; j < end_j ; j++){
+		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+	}
+	return NULL;
+}
+
+inline void distance_row_from_graph(const struct graph* restrict g, const int32_t i, float* restrict vector){
+	for(uint64_t j = 0 ; j < g->num_nodes ; j++){
+		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+	}
+}
+
+int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector, const int16_t num_row_threads){
+	pthread_t threads[num_row_threads];
+	struct row_thread_arg args[num_row_threads];
+	uint64_t start_j = 0;
+	uint64_t end_j;
+	for(int16_t k = 0 ; k < num_row_threads ; k++){
+		end_j = start_j + floor(g->num_nodes / num_row_threads);
+		if(((uint64_t) k) < g->num_nodes % ((uint64_t) num_row_threads)){
+			end_j++;
+		}
+		args[k].i = i;
+		args[k].start_j = start_j;
+		args[k].end_j = end_j;
+		args[k].vector = vector;
+		args[k].g = g;
+		if(pthread_create(&(threads[k]), NULL, row_thread, &(args[k])) != 0){
+			perror("failed to create row thread\n");
+			return 1;
+		}
+		start_j = end_j;
+	}
+
+	for(int16_t i = 0 ; i < num_row_threads ; i++){
+		if(pthread_join(threads[i], NULL) != 0){
+			perror("failed to join matrix thread\n");
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+struct matrix_thread_arg {
+	struct matrix* m;
+	struct graph* g;
+	uint8_t thread_rank;
+	uint8_t thread_total_count;
+};
+
+void* matrix_thread(void* args){
+	int32_t thread_rank = (int32_t) (((struct matrix_thread_arg*) args)->thread_rank);
+	int32_t thread_total_count = (int32_t) (((struct matrix_thread_arg*) args)->thread_total_count);
+	struct matrix* m = ((struct matrix_thread_arg*) args)->m;
+	struct graph* g = ((struct matrix_thread_arg*) args)->g;
+	for(uint64_t i = (uint64_t) thread_rank ; i < m->a ; i += thread_total_count){
+		switch(m->fp_mode){
+			case FP32:
+				m->bfr.fp32[i * m->b + i] = 0.0f;
+				break;
+			case FP64:
+				m->bfr.fp64[i * m->b + i] = 0.0;
+				break;
+		}
+		for(uint64_t j = i + 1 ; j < m->b ; j++){
+			switch(m->fp_mode){
+				case FP32:
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
+					break;
+				case FP64:
+					m->bfr.fp64[i * m->b + j] = (double) cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
+					m->bfr.fp64[j * m->b + i] = m->bfr.fp64[i * m->b + j];
+					break;
+			}
+		}
+	}
+	return NULL;
+}
+
+int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m, const int16_t num_matrix_threads){
+	if(m->a != m->b){
+		perror("m->a != m->b\n");
+		return 1;
+	}
+	if(((uint32_t) g->num_nodes) != m->a){
+		perror("g->num_nodes != m->a\n");
+		printf("g->num_nodes: %lu\n", g->num_nodes);
+		printf("m->a: %u\n", m->a);
+		return 1;
+	}
+	
+	pthread_t threads[num_matrix_threads];
+	struct matrix_thread_arg args[num_matrix_threads];
+	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
+		args[i].thread_rank = i;
+		args[i].thread_total_count = num_matrix_threads;
+		args[i].m = m;
+		args[i].g = g;
+		if(pthread_create(&(threads[i]), NULL, matrix_thread, &(args[i])) != 0){
+			perror("failed to create matrix thread\n");
+			return 1;
+		}
+	}
+
+	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
+		if(pthread_join(threads[i], NULL) != 0){
+			perror("failed to join matrix thread\n");
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+void free_matrix(struct matrix* m){
+	if(m->to_free == 0){return;}
+	switch(m->fp_mode){
+		case FP32:
+			free(m->bfr.fp32);
+			break;
+		case FP64:
+			free(m->bfr.fp64);
+			break;
+	}
+	free(m->active);
+	free(m->active_final);
+	m->to_free = 0;
+}
 int32_t stats_matrix(struct matrix* m, double* avg_p, double* std_p, double* min_p, double* max_p){
 	double sum = 0.0;
 	double min;
@@ -156,26 +445,6 @@ int32_t stats_matrix(struct matrix* m, double* avg_p, double* std_p, double* min
 	return 0;
 }
 
-struct graph_neighbour {
-	float distance;
-	uint64_t index;
-};
-
-struct graph_node {
-	uint16_t num_dimensions;
-	uint8_t already_considered;
-	double relative_proportion;
-	uint32_t absolute_proportion;
-	struct word2vec_entry* word2vec_entry_pointer;
-	struct graph_neighbour* neighbours;
-	uint32_t capacity_neighbours;
-	uint32_t num_neighbours;
-	pthread_mutex_t mutex_local_node;
-	union {
-		float* fp32;
-		double* fp64;
-	} vector;
-};
 
 enum {
 	GRAPH_NODE_FP32,
@@ -303,16 +572,6 @@ void free_graph_node(struct graph_node* restrict node, const int8_t fp_mode){
 }
 
 
-#define GRAPH_CAPACITY_STEP 64
-
-struct graph {
-	struct graph_node* nodes;
-	uint64_t num_nodes;
-	uint64_t capacity;
-	pthread_mutex_t mutex_nodes;
-	int16_t num_dimensions;
-};
-
 int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const int16_t num_dimensions, const int8_t fp_mode){
 	size_t malloc_size = num_nodes * sizeof(struct graph_node);
 	void* malloc_pointer = malloc(malloc_size);
@@ -322,6 +581,16 @@ int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const in
 	g->num_nodes = num_nodes;
 	g->capacity = num_nodes;
 	g->num_dimensions = num_dimensions;
+	// g->dist_mat = NULL;
+	/*
+	if(create_matrix(&(g->dist_mat), (uint32_t) g->num_nodes, (uint32_t) g->num_nodes, fp_mode) != 0){
+		perror("failed to call create_matrix\n");
+		free(g->nodes);
+		g->nodes = NULL;
+		return 1;
+	}
+	*/
+	g->dist_mat.to_free = 0;
 	pthread_mutex_init(&g->mutex_nodes, NULL);
 
 	double relative_proportion_sum = 0.0;
@@ -393,6 +662,29 @@ void compute_graph_relative_proportions(struct graph* const g){
 	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
 		g->nodes[i].relative_proportion = ((double) g->nodes[i].absolute_proportion) / ((double) sum);
 	}
+}
+
+int32_t compute_graph_dist_mat(struct graph* const g, const int16_t num_matrix_threads){
+	/*
+	size_t alloc_size;
+
+	alloc_size = (size_t) (g->num_nodes * g->num_nodes * sizeof(float));
+	g->dist_mat = (float*) realloc(g->dist_mat, alloc_size);
+	if(g->dist_mat == NULL){
+		perror("failed to realloc\n");
+		return 1;
+	}
+	memset(g->dist_mat, '\0', alloc_size);
+
+	for(i = 0 ; i < g->num_nodes ; i++){
+		for(j = i + 1 ; j
+	}
+	*/
+	if(distance_matrix_from_graph_multithread(g, &(g->dist_mat), num_matrix_threads) != 0){
+		perror("failed to call distance_matrix_from_graph\n");
+		return 1;
+	}
+	return 0;
 }
 
 struct word2vec_entry {
@@ -537,6 +829,8 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 	malloc_fail:
 	perror("malloc failed\n");
 	printf("errno: %i\n", errno);
+	if(w2v->vectors != NULL){free(w2v->vectors);}
+	if(w2v->keys != NULL){free(w2v->keys);}
 	goto return_failure;
 
 	return_failure:
@@ -605,7 +899,9 @@ struct word2vec_entry* word2vec_find_closest(const struct word2vec* restrict w2v
 
 
 void free_graph(struct graph* restrict g){
-	free((*g).nodes);
+	free(g->nodes);
+	// if(g->dist_mat != NULL){free(g->dist_mat);}
+	free_matrix(&(g->dist_mat));
 }
 
 struct distance_two_nodes {
@@ -1598,253 +1894,6 @@ int32_t word2vec_to_graph_fp32(struct graph* g, struct word2vec* w2v, char** cup
 	return 1;
 }
 
-int32_t create_matrix(struct matrix* m, uint32_t a, uint32_t b, int8_t fp_mode){
-	m->a = a;
-	m->b = b;
-	size_t malloc_size = ((size_t) a) * ((size_t) b);
-	switch(fp_mode){
-		case FP32:
-			malloc_size *= sizeof(float);
-			break;
-		case FP64:
-			malloc_size *= sizeof(double);
-			break;
-		default:
-			return 1;
-	}
-
-	void* malloc_pointer;
-
-
-	malloc_pointer = malloc(malloc_size);
-	if(malloc_pointer == NULL){goto malloc_failure;}
-	memset(malloc_pointer, '\0', malloc_size);
-	switch(fp_mode){
-		case FP32:
-			m->bfr.fp32 = (float*) malloc_pointer;
-			break;
-		case FP64:
-			m->bfr.fp64 = (double*) malloc_pointer;
-			break;
-	}
-
-	malloc_size = a * b * sizeof(int8_t);
-	malloc_pointer = malloc(malloc_size);
-	if(malloc_pointer == NULL){
-		switch(fp_mode){
-			case FP32:
-				free(m->bfr.fp32);
-				break;
-			case FP64:
-				free(m->bfr.fp64);
-				break;
-		}
-		goto malloc_failure;
-	}
-	memset(malloc_pointer, '\0', malloc_size);
-	m->active = (uint8_t*) malloc_pointer;
-
-	malloc_pointer = malloc(malloc_size);
-	if(malloc_pointer == NULL){
-		switch(fp_mode){
-			case FP32:
-				free(m->bfr.fp32);
-				break;
-			case FP64:
-				free(m->bfr.fp64);
-				break;
-		}
-		goto malloc_failure;
-	}
-	memset(malloc_pointer, '\0', malloc_size);
-	m->active_final = (uint8_t*) malloc_pointer;
-
-	m->fp_mode = fp_mode;
-
-	return 0;
-
-	malloc_failure:
-	fprintf(stderr, "Failed to malloc %li bytes\n", malloc_size);
-	return 1;
-}
-
-int32_t distance_matrix_from_graph(const struct graph* restrict g, struct matrix* restrict m){
-	if(m->a != m->b){
-		perror("m->a != m->b\n");
-		return 1;
-	}
-	if(((uint32_t) g->num_nodes) != m->a){
-		perror("g->num_nodes != m->a\n");
-		return 1;
-	}
-
-	for(uint64_t i = 0 ; i < m->a ; i++){
-		switch(m->fp_mode){
-			case FP32:
-				m->bfr.fp32[i * m->b + i] = 0.0f;
-				break;
-			case FP64:
-				m->bfr.fp64[i * m->b + i] = 0.0;
-				break;
-		}
-		for(uint64_t j = i + 1 ; j < m->b ; j++){
-			switch(m->fp_mode){
-				case FP32:
-					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
-					break;
-				case FP64:
-					m->bfr.fp64[i * m->b + j] = (double) cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
-					m->bfr.fp64[j * m->b + i] = m->bfr.fp64[i * m->b + j];
-					break;
-			}
-		}
-	}	
-
-	return 0;
-}
-
-struct row_thread_arg {
-	float* vector;
-	const struct graph* g;
-	uint64_t i;
-	uint64_t start_j;
-	uint64_t end_j;
-};
-
-void* row_thread(void* args){
-	float* vector = (((struct row_thread_arg*) args)->vector);
-	const struct graph* g = (((struct row_thread_arg*) args)->g);
-	uint64_t i = ((struct row_thread_arg*) args)->i;
-	uint64_t start_j = ((struct row_thread_arg*) args)->start_j;
-	uint64_t end_j = ((struct row_thread_arg*) args)->end_j;
-
-	for(uint64_t j = start_j ; j < end_j ; j++){
-		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-	}
-	return NULL;
-}
-
-inline void distance_row_from_graph(const struct graph* restrict g, const int32_t i, float* restrict vector){
-	for(uint64_t j = 0 ; j < g->num_nodes ; j++){
-		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-	}
-}
-
-int32_t distance_row_from_graph_multithread(const struct graph* g, const uint64_t i, float* vector, const int16_t num_row_threads){
-	pthread_t threads[num_row_threads];
-	struct row_thread_arg args[num_row_threads];
-	uint64_t start_j = 0;
-	uint64_t end_j;
-	for(int16_t k = 0 ; k < num_row_threads ; k++){
-		end_j = start_j + floor(g->num_nodes / num_row_threads);
-		if(((uint64_t) k) < g->num_nodes % ((uint64_t) num_row_threads)){
-			end_j++;
-		}
-		args[k].i = i;
-		args[k].start_j = start_j;
-		args[k].end_j = end_j;
-		args[k].vector = vector;
-		args[k].g = g;
-		if(pthread_create(&(threads[k]), NULL, row_thread, &(args[k])) != 0){
-			perror("failed to create row thread\n");
-			return 1;
-		}
-		start_j = end_j;
-	}
-
-	for(int16_t i = 0 ; i < num_row_threads ; i++){
-		if(pthread_join(threads[i], NULL) != 0){
-			perror("failed to join matrix thread\n");
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-struct matrix_thread_arg {
-	struct matrix* m;
-	struct graph* g;
-	uint8_t thread_rank;
-	uint8_t thread_total_count;
-};
-
-void* matrix_thread(void* args){
-	int32_t thread_rank = (int32_t) (((struct matrix_thread_arg*) args)->thread_rank);
-	int32_t thread_total_count = (int32_t) (((struct matrix_thread_arg*) args)->thread_total_count);
-	struct matrix* m = ((struct matrix_thread_arg*) args)->m;
-	struct graph* g = ((struct matrix_thread_arg*) args)->g;
-	for(uint64_t i = (uint64_t) thread_rank ; i < m->a ; i += thread_total_count){
-		switch(m->fp_mode){
-			case FP32:
-				m->bfr.fp32[i * m->b + i] = 0.0f;
-				break;
-			case FP64:
-				m->bfr.fp64[i * m->b + i] = 0.0;
-				break;
-		}
-		for(uint64_t j = i + 1 ; j < m->b ; j++){
-			switch(m->fp_mode){
-				case FP32:
-					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
-					break;
-				case FP64:
-					m->bfr.fp64[i * m->b + j] = (double) cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
-					m->bfr.fp64[j * m->b + i] = m->bfr.fp64[i * m->b + j];
-					break;
-			}
-		}
-	}
-	return NULL;
-}
-
-int32_t distance_matrix_from_graph_multithread(struct graph* g, struct matrix* m, const int16_t num_matrix_threads){
-	if(m->a != m->b){
-		perror("m->a != m->b\n");
-		return 1;
-	}
-	if(((uint32_t) g->num_nodes) != m->a){
-		perror("g->num_nodes != m->a\n");
-		return 1;
-	}
-	
-	pthread_t threads[num_matrix_threads];
-	struct matrix_thread_arg args[num_matrix_threads];
-	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
-		args[i].thread_rank = i;
-		args[i].thread_total_count = num_matrix_threads;
-		args[i].m = m;
-		args[i].g = g;
-		if(pthread_create(&(threads[i]), NULL, matrix_thread, &(args[i])) != 0){
-			perror("failed to create matrix thread\n");
-			return 1;
-		}
-	}
-
-	for(int32_t i = 0 ; i < num_matrix_threads ; i++){
-		if(pthread_join(threads[i], NULL) != 0){
-			perror("failed to join matrix thread\n");
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-void free_matrix(struct matrix* m){
-	switch(m->fp_mode){
-		case FP32:
-			free(m->bfr.fp32);
-			break;
-		case FP64:
-			free(m->bfr.fp64);
-			break;
-	}
-	free(m->active);
-	free(m->active_final);
-}
 
 int32_t _weitzman(struct matrix* m, double* res){
 	int32_t argmin_dim1_index = 0;
