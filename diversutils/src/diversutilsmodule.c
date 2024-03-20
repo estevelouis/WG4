@@ -46,6 +46,7 @@ enum {
 	ID_INDEX_SPECIES_COUNT,
 	ID_INDEX_HILL_EVENNESS,
 	ID_INDEX_SHANNON_EVENNESS,
+	ID_INDEX_BERGER_PARKER,
 	ID_INDEX_JUNGE1994_PAGE22,
 	ID_INDEX_BRILLOUIN,
 	ID_INDEX_MCINTOSH,
@@ -60,13 +61,23 @@ enum {
 	ID_INDEX_E_MCI_PIELOU1969,
 	ID_INDEX_E_PRIME_CAMARGO1993,
 	ID_INDEX_E_VAR_SMITH_AND_WILSON1996,
-	ID_PAIRWISE,
+	ID_DISPARITY_PAIRWISE,
+	ID_DISPARITY_CHAO_ET_AL_FUNCTIONAL,
+	ID_DISPARITY_LEINSTER_COBBOLD,
+	ID_DISPARITY_SCHEINER,
+	ID_DISPARITY_STIRLING,
+	ID_DISPARITY_RICOTTA_SZEIDL,
 };
 
 static uint32_t num_graphs = 0;
 static struct graph* global_graphs = NULL;
 static uint8_t* global_graphs_freed = NULL;
+static int32_t* global_graphs_word2vec_bindings = NULL;
+
+static uint32_t num_w2v = 0;
+static uint8_t* global_w2v_freed = NULL;
 static struct word2vec* global_word2vecs = NULL;
+
 static struct cfg* configurations = NULL;
 
 static PyObject* interface_measurement_from_cfg(PyObject* self, PyObject* args){
@@ -112,10 +123,18 @@ static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
 
+	/*
 	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
 	global_word2vecs = realloc(global_word2vecs, alloc_size);
 	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
+	*/
+
+	alloc_size = (num_graphs + 1) * sizeof(int32_t);
+	global_graphs_word2vec_bindings = realloc(global_graphs_word2vec_bindings, alloc_size);
+	if(global_graphs_word2vec_bindings == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	// memset((void*) &(global_graphs_word2vec_bindings[num_graphs]), '\0', sizeof(int32_t));
+	global_graphs_word2vec_bindings[num_graphs] = -1;
 
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
 	configurations = realloc(configurations, alloc_size);
@@ -159,10 +178,18 @@ static PyObject* interface_create_graph(PyObject* self, PyObject* args){
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
 
+	/*
 	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
 	global_word2vecs = realloc(global_word2vecs, alloc_size);
 	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
+	*/
+
+	alloc_size = (num_graphs + 1) * sizeof(int32_t);
+	global_graphs_word2vec_bindings = realloc(global_graphs_word2vec_bindings, alloc_size);
+	if(global_graphs_word2vec_bindings == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	// memset((void*) &(global_graphs_word2vec_bindings[num_graphs]), '\0', sizeof(int32_t));
+	global_graphs_word2vec_bindings[num_graphs] = -1;
 
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
 	configurations = realloc(configurations, alloc_size);
@@ -208,7 +235,7 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 
 	if(global_graphs_freed[index] == 0){
 		free_graph(&(global_graphs[index]));
-		free_word2vec(&(global_word2vecs[index]));
+		// free_word2vec(&(global_word2vecs[index]));
 		free_cfg(&(configurations[index]));
 		global_graphs_freed[index] = 1;
 	} else {
@@ -220,11 +247,10 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 	return res;
 }
 
-static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
+static PyObject* interface_free_w2v(PyObject* self, PyObject* args){
 	int32_t index;
-	unsigned char* w2v_path;
 
-	if(!PyArg_ParseTuple(args, "is", &index, &w2v_path)){
+	if(!PyArg_ParseTuple(args, "i", &index)){
 		return NULL;
 	}
 
@@ -232,15 +258,74 @@ static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
 		perror("index must be >= 0\n");
 		return NULL;
 	}
-	if(((uint32_t) index) >= num_graphs){
+	if(((uint32_t) index) >= num_w2v){
 		perror("index too high\n");
 		return NULL;
 	}
 
-	if(load_word2vec_binary(&(global_word2vecs[index]), w2v_path) != 0){
+	if(global_w2v_freed[index] == 0){
+		printf("trying to free\n");
+		free_word2vec(&(global_word2vecs[index]));
+		global_w2v_freed[index] = 1;
+	} else {
+		printf("w2v already freed\n");
+	}
+
+	PyObject* res = Py_BuildValue("i", 0);
+
+	return res;
+}
+
+static PyObject* interface_load_w2v(PyObject* self, PyObject* args){
+	char* w2v_path;
+	size_t alloc_size;
+	PyObject* res;
+
+	if(!PyArg_ParseTuple(args, "s", &w2v_path)){
+		return NULL;
+	}
+
+	alloc_size = (num_w2v + 1) * sizeof(struct word2vec);
+	global_word2vecs = realloc(global_word2vecs, alloc_size);
+	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	memset((void*) &(global_word2vecs[num_w2v]), '\0', sizeof(struct word2vec));
+
+	alloc_size = (num_w2v + 1) * sizeof(uint8_t);
+	global_w2v_freed = realloc(global_w2v_freed, alloc_size);
+	if(global_w2v_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
+	memset((void*) &(global_w2v_freed[num_w2v]), '\0', sizeof(uint8_t));
+
+	if(load_word2vec_binary(&(global_word2vecs[num_w2v]), w2v_path) != 0){
 		perror("failed to call load_word2vec_binary\n");
 		return NULL;
 	}
+
+	res = Py_BuildValue("i", num_w2v);
+
+	num_w2v++;
+
+	return res;
+
+	exit_failure:
+	res = Py_BuildValue("i", -1);
+	return res;
+}
+
+static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
+	int32_t index_g, index_w2v;
+
+	if(!PyArg_ParseTuple(args, "ii", &index_g, &index_w2v)){
+		return NULL;
+	}
+
+	if(index_g < 0){perror("index_g must be >= 0\n"); return NULL;}
+	if(((uint32_t) index_g) >= num_graphs){perror("index_g too high\n"); return NULL;}
+	if(index_w2v < 0){perror("index_w2v must be >= 0\n"); return NULL;}
+	if(((uint32_t) index_w2v) >= num_w2v){perror("index_w2v too high\n"); return NULL;}
+
+	global_graphs_word2vec_bindings[index_g] = index_w2v;
+	
+	printf("connected graph %i and w2v %i\n", index_g, index_w2v);
 
 	return Py_BuildValue("i", 0);
 }
@@ -272,13 +357,14 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 	global_graphs[index].nodes[global_graphs[index].num_nodes].absolute_proportion = (uint32_t) absolute_proportion;
 
 	if(key != NULL){
-		w2v_index = word2vec_key_to_index(&(global_word2vecs[index]), key);
+		if(global_graphs_word2vec_bindings[index] < 0){perror("No Word2Vec bound to graph\n"); return NULL;}
+		w2v_index = word2vec_key_to_index(&(global_word2vecs[global_graphs_word2vec_bindings[index]]), key);
 		if(w2v_index == -1){
 			fprintf(stdout, "unknown key: %s\n", key);
 			return NULL;
 		}
-		global_graphs[index].nodes[global_graphs[index].num_nodes].word2vec_entry_pointer = &(global_word2vecs[index].keys[w2v_index]);
-		global_graphs[index].nodes[global_graphs[index].num_nodes].vector.fp32 = global_word2vecs[index].keys[w2v_index].vector;
+		global_graphs[index].nodes[global_graphs[index].num_nodes].word2vec_entry_pointer = &(global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index]);
+		global_graphs[index].nodes[global_graphs[index].num_nodes].vector.fp32 = global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index].vector;
 		global_graphs[index].nodes[global_graphs[index].num_nodes].num_dimensions = global_graphs[index].num_dimensions;
 	}
 
@@ -365,6 +451,9 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 		case ID_INDEX_SHANNON_EVENNESS:
 			shannon_evenness_from_graph(&(global_graphs[index]), &res1);
 			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_BERGER_PARKER:
+			berger_parker_index_from_graph(&(global_graphs[index]), &res1);
+			return Py_BuildValue("(d)", res1);
 		case ID_INDEX_JUNGE1994_PAGE22:
 			junge1994_page22_from_graph(&(global_graphs[index]), &res1);
 			return Py_BuildValue("(d)", res1);
@@ -407,8 +496,29 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 		case ID_INDEX_E_VAR_SMITH_AND_WILSON1996:
 			sw_e_var_smith_and_wilson1996_original_from_graph(&(global_graphs[index]), &res1);
 			return Py_BuildValue("(d)", res1);
-		case ID_PAIRWISE:
+		case ID_DISPARITY_PAIRWISE:
 			pairwise_from_graph(&(global_graphs[index]), &res1, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
+		case ID_DISPARITY_CHAO_ET_AL_FUNCTIONAL:
+			if(chao_et_al_functional_diversity_from_graph(&(global_graphs[index]), &res1, &res2, alpha, FP32, NULL) != 0){
+				perror("failed to call chao_et_al_functional_diversity_from_graph\n");
+				return NULL;
+			}
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_LEINSTER_COBBOLD:
+			leinster_cobbold_diversity_from_graph(&(global_graphs[index]), &res1, &res2, alpha, FP32, NULL);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_SCHEINER:
+			if(scheiner_species_phylogenetic_functional_diversity_from_graph(&(global_graphs[index]), &res1, &res2, alpha, FP32, NULL) != 0){
+				perror("failed to call scheiner_species_phylogenetic_functional_diversity_from_graph\n");
+				return NULL;
+			}
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_STIRLING:
+			stirling_from_graph(&(global_graphs[index]), &res1, alpha, beta, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
+		case ID_DISPARITY_RICOTTA_SZEIDL:
+			ricotta_szeidl_from_graph(&(global_graphs[index]), &res1, alpha, FP32, NULL);
 			return Py_BuildValue("(d)", res1);
 		default:
 			perror("unknown diversity function\n");
@@ -444,7 +554,19 @@ static PyObject* interface_cfg_get_value(PyObject* self, PyObject* args){
 	return res;
 }
 
+static PyObject* interface_free_globals(PyObject* self, PyObject* args){
+	if(global_graphs != NULL){free(global_graphs);}
+	if(global_graphs_freed != NULL){free(global_graphs_freed);}
+	if(global_graphs_word2vec_bindings != NULL){free(global_graphs_word2vec_bindings);}
+	if(global_w2v_freed != NULL){free(global_w2v_freed);}
+	if(global_word2vecs != NULL){free(global_word2vecs);}
+	if(configurations != NULL){free(configurations);}
+
+	return Py_BuildValue("i", 0);
+}
+
 static PyMethodDef diversutilsmethods[] = {
+	{"__del__", interface_free_globals, METH_VARARGS, "__del__"},
 	{"create_graph", interface_create_graph, METH_VARARGS, "Create a graph. This returns the graph index. ARGS: num_nodes, num_dimensions, config_path."},
 	{"create_empty_graph", interface_create_empty_graph, METH_VARARGS, "Create a an graph. This returns the graph index. ARGS: num_nodes, num_dimensions."},
 	{"free_graph", interface_free_graph, METH_VARARGS, "Free a graph. This requires the graph index."},
@@ -453,7 +575,9 @@ static PyMethodDef diversutilsmethods[] = {
 	{"add_node", interface_add_node, METH_VARARGS, "Add a node (args: graph index, number of dimensions, absolute proportion)."},
 	{"individual_measure", interface_individual_measure, METH_VARARGS, "Compute an individual measure. ARGS: graph index, measure index, order 1 (optional), order 2 (optional)."},
 	{"compute_relative_proportion", interface_compute_relative_proportions, METH_VARARGS, "Compute relative proportions. ARGS: graph index."},
-	{"bind_w2v", interface_bind_w2v, METH_VARARGS, "Bind a Word2Vec binary to a graph.. ARGS: graph index, Word2Vec binary path."},
+	{"bind_w2v", interface_bind_w2v, METH_VARARGS, "Bind a Word2Vec binary to a graph. ARGS: graph index, Word2Vec index."},
+	{"load_w2v", interface_load_w2v, METH_VARARGS, "Load a Word2Vec binary. ARGS: Word2Vec index."},
+	{"free_w2v", interface_free_w2v, METH_VARARGS, "Free a Word2Vec binary. ARGS: Word2Vec index."},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -476,13 +600,13 @@ PyMODINIT_FUNC PyInit_diversutils(void){
 	PyModule_AddIntConstant(mod, "DF_ENTROPY_PATIL_TAILLIE", ID_ENTROPY_PATIL_TAILLIE);
 	PyModule_AddIntConstant(mod, "DF_ENTROPY_RENYI", ID_ENTROPY_RENYI);
 	PyModule_AddIntConstant(mod, "DF_ENTROPY_GOOD", ID_ENTROPY_GOOD);
-	PyModule_AddIntConstant(mod, "DF_PAIRWISE", ID_PAIRWISE);
 	PyModule_AddIntConstant(mod, "DF_INDEX_SIMPSON_DOMINANCE", ID_INDEX_SIMPSON_DOMINANCE);
 	PyModule_AddIntConstant(mod, "DF_INDEX_SIMPSON", ID_INDEX_SIMPSON);
 	PyModule_AddIntConstant(mod, "DF_INDEX_RICHNESS", ID_INDEX_RICHNESS);
 	PyModule_AddIntConstant(mod, "DF_INDEX_SPECIES_COUNT", ID_INDEX_SPECIES_COUNT);
 	PyModule_AddIntConstant(mod, "DF_INDEX_HILL_EVENNESS", ID_INDEX_HILL_EVENNESS);
 	PyModule_AddIntConstant(mod, "DF_INDEX_SHANNON_EVENNESS", ID_INDEX_SHANNON_EVENNESS);
+	PyModule_AddIntConstant(mod, "DF_INDEX_BERGER_PARKER", ID_INDEX_BERGER_PARKER);
 	PyModule_AddIntConstant(mod, "DF_INDEX_JUNGE1994_PAGE22", ID_INDEX_JUNGE1994_PAGE22);
 	PyModule_AddIntConstant(mod, "DF_INDEX_BRILLOUIN", ID_INDEX_BRILLOUIN);
 	PyModule_AddIntConstant(mod, "DF_INDEX_MCINTOSH", ID_INDEX_MCINTOSH);
@@ -497,5 +621,11 @@ PyMODINIT_FUNC PyInit_diversutils(void){
 	PyModule_AddIntConstant(mod, "DF_INDEX_E_MCI_PIELOU1969", ID_INDEX_E_MCI_PIELOU1969);
 	PyModule_AddIntConstant(mod, "DF_INDEX_E_PRIME_CAMARGO1993", ID_INDEX_E_PRIME_CAMARGO1993);
 	PyModule_AddIntConstant(mod, "DF_INDEX_E_VAR_SMITH_AND_WILSON1996", ID_INDEX_E_VAR_SMITH_AND_WILSON1996);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_PAIRWISE", ID_DISPARITY_PAIRWISE);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_CHAO_ET_AL_FUNCTIONAL", ID_DISPARITY_CHAO_ET_AL_FUNCTIONAL);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_LEINSTER_COBBOLD", ID_DISPARITY_LEINSTER_COBBOLD);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_SCHEINER", ID_DISPARITY_SCHEINER);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_STIRLING", ID_DISPARITY_STIRLING);
+	PyModule_AddIntConstant(mod, "DF_DISPARITY_RICOTTA_SZEIDL", ID_DISPARITY_RICOTTA_SZEIDL);
 	return mod;
 }

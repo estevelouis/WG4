@@ -899,6 +899,10 @@ struct word2vec_entry* word2vec_find_closest(const struct word2vec* restrict w2v
 
 
 void free_graph(struct graph* restrict g){
+	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
+		// free_graph_node(&(g->nodes[i]), FP32); // not needed as pointers to w2v entries
+		free(g->nodes[i].neighbours);
+	}
 	free(g->nodes);
 	// if(g->dist_mat != NULL){free(g->dist_mat);}
 	free_matrix(&(g->dist_mat));
