@@ -1,0 +1,10 @@
+build
+diversutils/build
+utils/output*
+*.egg-info
+*/*.egg-info
+diversutils/test/__pycache__
+diversutils/test/test_entropy_renyi
+diversutils/test/test_entropy_patil_taillie
+diversutils/test/test_entropy_shannon_weaver
+diversutils/test/test_graph_relative_proportion

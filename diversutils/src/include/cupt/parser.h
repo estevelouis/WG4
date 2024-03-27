@@ -419,7 +419,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 	}
 	int8_t currently_in_text_line = 0;
 	while(fgets(csi->bfr_read, FILE_READ_BUFFER_SIZE, csi->file_ptr)){
-		if(previous_line_finished && strcmp(csi->bfr_read, "\n") == 0){
+		if(previous_line_finished && (csi->bfr_read[0] == '\n' || csi->bfr_read[0] == '\r')){
 			break;
 		}
 		if(currently_in_text_line == 1){
@@ -435,7 +435,11 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			continue;
 		}
 		if(strncmp(csi->bfr_read, "# text =", strlen("# text =")) == 0 || strncmp(csi->bfr_read, "# text=", strlen("# text=")) == 0){
-			currently_in_text_line = 1;
+			if(strchr(csi->bfr_read, '\n') != NULL || strchr(csi->bfr_read, '\r') != NULL){
+				currently_in_text_line = 0;
+			} else {
+				currently_in_text_line = 1;
+			}
 			continue;
 		}
 
