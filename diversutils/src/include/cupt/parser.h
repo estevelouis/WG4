@@ -28,12 +28,10 @@
 #ifndef CUPT_PARSER_H
 #define CUPT_PARSER_H
 
-#include<string.h>
-#include<errno.h>
-
-#include<stdio.h>
-
-#include<fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
 
 #include "cupt/constants.h"
 
@@ -304,7 +302,7 @@ struct cupt_sentence_iterator {
 	int32_t sentence_to_free;
 };
 
-int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator* csi, char* file_name){
+int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator* const csi, const char* const file_name){
 	int32_t err = 0;
 
 	FILE* fp = fopen(file_name, "r");
@@ -412,6 +410,9 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 	int32_t current_index_in_column = 0;
 	int32_t column_sizes[11] = {TOKEN_ID_RAW_SIZE, TOKEN_FORM_SIZE, TOKEN_LEMMA_SIZE, TOKEN_UPOS_SIZE, TOKEN_XPOS_SIZE, TOKEN_FEATS_SIZE, TOKEN_HEAD_SIZE, TOKEN_DEPREL_SIZE, TOKEN_DEPS_SIZE, TOKEN_MISC_SIZE, TOKEN_MWE_SIZE};
 	char* columns[11] = {id_raw, form, lemma, upos, xpos, feats, head, deprel, deps, misc, mwe};
+
+	// printf("number of columns: %li\n", sizeof(column_sizes) / sizeof(column_sizes[0]));
+
 	int8_t previous_line_finished = 1;
 	if(feof(csi->file_ptr)){
 		csi->file_is_done = 1;
@@ -432,6 +433,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 					break;
 				}
 			}
+			memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
 			continue;
 		}
 		if(strncmp(csi->bfr_read, "# text =", strlen("# text =")) == 0 || strncmp(csi->bfr_read, "# text=", strlen("# text=")) == 0){
@@ -440,51 +442,94 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			} else {
 				currently_in_text_line = 1;
 			}
+			memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
 			continue;
 		}
 
 		previous_line_finished = 0;
-		for(int32_t i = 0 ; i < FILE_READ_BUFFER_SIZE ; i++){
+		int32_t i = 0;
+		while(i < FILE_READ_BUFFER_SIZE){
 			if(csi->bfr_read[i] == '\0'){
+				// if(i < FILE_READ_BUFFER_SIZE - 1 && csi->bfr_read[i + 1] != '\0'){i++; continue;}
 				break;
 			}
-			if(csi->bfr_read[i] == '\t'){
-				current_column++;
-				current_index_in_column = 0;
-			} else if(csi->bfr_read[i] == '\r' || csi->bfr_read[i] == '\n'){
-				struct token t;
-				err = create_token(&t, id_raw, form, lemma, upos, xpos, feats, head, deprel, deps, misc, mwe);
-				if(err != 0){
-					perror("failed to create token in parsing\n");
-					return 1;
-				}
-				err = add_token_to_sentence(&(csi->current_sentence), &t);
-				if(err != 0){
-					perror("failed to add token to sentence in parsing\n");
-					return 1;
-				}
-				memset(id_raw, '\0', TOKEN_ID_RAW_SIZE);
-				memset(form, '\0', TOKEN_FORM_SIZE);
-				memset(lemma, '\0', TOKEN_LEMMA_SIZE);
-				memset(upos, '\0', TOKEN_UPOS_SIZE);
-				memset(xpos, '\0', TOKEN_XPOS_SIZE);
-				memset(feats, '\0', TOKEN_FEATS_SIZE);
-				memset(head, '\0', TOKEN_HEAD_SIZE);
-				memset(deprel, '\0', TOKEN_DEPREL_SIZE);
-				memset(deps, '\0', TOKEN_DEPS_SIZE);
-				memset(misc, '\0', TOKEN_MISC_SIZE);
-				memset(mwe, '\0', TOKEN_MWE_SIZE);
 
-				current_column = 0;
-				current_index_in_column = 0;
-				previous_line_finished = 1;
-			} else {
-				if(current_index_in_column < column_sizes[current_column] - 1){
-					columns[current_column][current_index_in_column] = csi->bfr_read[i];
+			int32_t unicode_length = 1;
+			if(((unsigned char) csi->bfr_read[i]) >= 0b00000000 && ((unsigned char) csi->bfr_read[i]) < 0b11000000){unicode_length = 1;}
+			else if(((unsigned char) csi->bfr_read[i]) >= 0b11000000 && ((unsigned char) csi->bfr_read[i]) < 0b11100000){unicode_length = 2;}
+			else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000 && ((unsigned char) csi->bfr_read[i]) < 0b11110000){unicode_length = 3;}
+			else {unicode_length = 4;}
+
+			if(unicode_length == 1){
+				if(csi->bfr_read[i] == '\t'){
+					current_column++;
+					if(current_column >= sizeof(column_sizes) / sizeof(column_sizes[0])){
+						printf("Failed to parse a token correctly (sent_id=%s)\n", csi->current_sentence.sentence_id);
+						current_column = 0;
+						current_index_in_column = 0;
+						previous_line_finished = 1; // ?
+						break;
+					}
+					current_index_in_column = 0;
+				} else if(csi->bfr_read[i] == '\r' || csi->bfr_read[i] == '\n'){
+					struct token t;
+
+					/*
+					if(current_column != sizeof(column_sizes) / sizeof(column_sizes[0])){
+						perror("Failed to parse a token\n");
+						i += unicode_length;
+					}
+					*/
+
+					if(current_column >= 9){
+						err = create_token(&t, id_raw, form, lemma, upos, xpos, feats, head, deprel, deps, misc, mwe);
+						if(err != 0){
+							perror("failed to create token in parsing\n");
+							return 1;
+						}
+						err = add_token_to_sentence(&(csi->current_sentence), &t);
+						if(err != 0){
+							perror("failed to add token to sentence in parsing\n");
+							return 1;
+						}
+					} else {
+						perror("Failed to parse a token\n");
+					}					
+
+					memset(id_raw, '\0', TOKEN_ID_RAW_SIZE);
+					memset(form, '\0', TOKEN_FORM_SIZE);
+					memset(lemma, '\0', TOKEN_LEMMA_SIZE);
+					memset(upos, '\0', TOKEN_UPOS_SIZE);
+					memset(xpos, '\0', TOKEN_XPOS_SIZE);
+					memset(feats, '\0', TOKEN_FEATS_SIZE);
+					memset(head, '\0', TOKEN_HEAD_SIZE);
+					memset(deprel, '\0', TOKEN_DEPREL_SIZE);
+					memset(deps, '\0', TOKEN_DEPS_SIZE);
+					memset(misc, '\0', TOKEN_MISC_SIZE);
+					memset(mwe, '\0', TOKEN_MWE_SIZE);
+	
+					current_column = 0;
+					current_index_in_column = 0;
+					previous_line_finished = 1;
+				} else {
+					if(current_index_in_column < column_sizes[current_column] - 1){
+						columns[current_column][current_index_in_column] = csi->bfr_read[i];
+					}
+					current_index_in_column++;
 				}
-				current_index_in_column++;
+			} else {
+				if(current_index_in_column + (unicode_length - 1) < column_sizes[current_column] - 1){
+					for(int32_t j = 0 ; j < unicode_length ; j++){
+						columns[current_column][current_index_in_column + j] = csi->bfr_read[i + j];
+					}
+				}
+				current_index_in_column += unicode_length;
+				
 			}
+
+			i += unicode_length;
 		}
+		memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
 	}
 
 	csi->sentence_to_free = 1;
