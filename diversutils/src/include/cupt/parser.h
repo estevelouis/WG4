@@ -455,15 +455,21 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			}
 
 			int32_t unicode_length = 1;
+			/*
 			if(((unsigned char) csi->bfr_read[i]) >= 0b00000000 && ((unsigned char) csi->bfr_read[i]) < 0b11000000){unicode_length = 1;}
 			else if(((unsigned char) csi->bfr_read[i]) >= 0b11000000 && ((unsigned char) csi->bfr_read[i]) < 0b11100000){unicode_length = 2;}
 			else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000 && ((unsigned char) csi->bfr_read[i]) < 0b11110000){unicode_length = 3;}
 			else {unicode_length = 4;}
+			*/
+			if(((unsigned char) csi->bfr_read[i]) >= 0b11110000){unicode_length = 4;}
+			else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000){unicode_length = 3;}
+			else if(((unsigned char) csi->bfr_read[i]) >= 0b11000000){unicode_length = 2;}
+			else {unicode_length = 1;}
 
 			if(unicode_length == 1){
 				if(csi->bfr_read[i] == '\t'){
 					current_column++;
-					if(current_column >= sizeof(column_sizes) / sizeof(column_sizes[0])){
+					if(current_column >= (int32_t) (sizeof(column_sizes) / sizeof(column_sizes[0]))){
 						printf("Failed to parse a token correctly (sent_id=%s)\n", csi->current_sentence.sentence_id);
 						current_column = 0;
 						current_index_in_column = 0;
@@ -523,8 +529,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 						columns[current_column][current_index_in_column + j] = csi->bfr_read[i + j];
 					}
 				}
-				current_index_in_column += unicode_length;
-				
+				current_index_in_column += unicode_length;	
 			}
 
 			i += unicode_length;
