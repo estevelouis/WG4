@@ -88,6 +88,9 @@
 #ifndef ENABLE_PATIL_TAILLIE_ENTROPY
 #define ENABLE_PATIL_TAILLIE_ENTROPY 1
 #endif
+#ifndef ENABLE_Q_LOGARITHMIC_ENTROPY
+#define ENABLE_Q_LOGARITHMIC_ENTROPY 1
+#endif
 #ifndef ENABLE_SIMPSON_INDEX
 #define ENABLE_SIMPSON_INDEX 1
 #endif
@@ -154,6 +157,7 @@
 #define GOOD_BETA 2.0
 #define RENYI_ALPHA 2.0
 #define PATIL_TAILLIE_ALPHA 1.0
+#define Q_LOGARITHMIC_Q 2.0
 #define HILL_NUMBER_STANDARD_ALPHA 2.0
 #define HILL_EVENNESS_ALPHA 2.0
 #define HILL_EVENNESS_BETA 1.0
@@ -179,12 +183,21 @@
 #ifndef ENABLE_MULTITHREADED_ROW_GENERATION
 #define ENABLE_MULTITHREADED_ROW_GENERATION 1
 #endif
+#ifndef ROW_GENERATION_BATCH_SIZE
+#define ROW_GENERATION_BATCH_SIZE 16
+#endif
 
 #ifndef SENTENCE_COUNT_RECOMPUTE_STEP
 #define SENTENCE_COUNT_RECOMPUTE_STEP 1
 #endif
 #ifndef ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP
 #define ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP 0
+#endif
+#ifndef SENTENCE_RECOMPUTE_STEP_USE_LOG10
+#define SENTENCE_RECOMPUTE_STEP_USE_LOG10 0
+#endif
+#ifndef SENTENCE_COUNT_RECOMPUTE_STEP_LOG10
+#define SENTENCE_COUNT_RECOMPUTE_STEP_LOG10 0.1
 #endif
 
 #ifndef DOCUMENT_COUNT_RECOMPUTE_STEP
@@ -193,6 +206,12 @@
 #ifndef ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP
 #define ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP 0
 #endif
+#ifndef DOCUMENT_RECOMPUTE_STEP_USE_LOG10
+#define DOCUMENT_RECOMPUTE_STEP_USE_LOG10 0
+#endif
+#ifndef DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10
+#define DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10 0.1
+#endif
 
 #ifndef INPUT_PATH
 #define INPUT_PATH "measurement_files.txt"
@@ -200,6 +219,20 @@
 #ifndef OUTPUT_PATH
 #define OUTPUT_PATH "measurement_output.tsv"
 #endif
+#ifndef OUTPUT_PATH_TIMING
+#define OUTPUT_PATH_TIMING "measurement_output_timing.tsv"
+#endif
+#ifndef OUTPUT_PATH_MEMORY
+#define OUTPUT_PATH_MEMORY "measurement_output_memory.tsv"
+#endif
+
+#ifndef ENABLE_OUTPUT_TIMING
+#define ENABLE_OUTPUT_TIMING 1
+#endif
+#ifndef ENABLE_OUTPUT_MEMORY
+#define ENABLE_OUTPUT_MEMORY 1
+#endif
+
 
 #ifndef TARGET_COLUMN
 #define TARGET_COLUMN UD_MWE
@@ -208,6 +241,12 @@
 #ifndef W2V_PATH
 #define W2V_PATH "/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin"
 #endif
+
+#ifndef JSONL_CONTENT_KEY
+#define JSONL_CONTENT_KEY "text"
+#endif
+
+const uint8_t ENABLE_DISTANCE_COMPUTATION = ENABLE_DISPARITY_FUNCTIONS && (ENABLE_STIRLING || ENABLE_RICOTTA_SZEIDL || ENABLE_PAIRWISE || ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY || ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY || ENABLE_LEINSTER_COBBOLD_DIVERSITY || ENABLE_LEXICOGRAPHIC || ENABLE_FUNCTIONAL_EVENNESS || ENABLE_FUNCTIONAL_DISPERSION || ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED);
 
 enum {
 	CONLLU_COLUMN_UPOS,
@@ -219,18 +258,186 @@ const int32_t NUM_CONLLU_COLUMNS_TO_ADD = 0;
 
 const int32_t CONLLU_ADD_FORM = 0;
 
-int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database){
+double stacked_sentence_count_log10 = SENTENCE_COUNT_RECOMPUTE_STEP_LOG10;
+uint64_t stacked_sentence_count_target;
+double stacked_document_count_log10 = DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10;
+uint64_t stacked_document_count_target;
+
+static int32_t time_ns_delta(int64_t* const delta){
+	static struct timespec static_ts = (struct timespec) {};
+
+	struct timespec new_ts;
+
+	if(clock_gettime(CLOCK_MONOTONIC, &new_ts) != 0){
+		perror("Failed to call clock_gettime\n");
+		return 1;
+	}
+
+	if(delta != NULL){
+		(*delta) = (new_ts.tv_sec - static_ts.tv_sec) * 1000000000 + (new_ts.tv_nsec - static_ts.tv_nsec);
+	}
+
+	static_ts = new_ts;
+
+	return 0;
+}
+
+int32_t virtual_memory_consumption(int64_t* const res){
+	FILE* f;
+	const int32_t bfr_size = 2048;
+	char bfr[bfr_size];
+	char* strtok_pointer;
+
+	if(res == NULL){
+		perror("Cannot pass NULL pointer to virtual_memory_consumption\n");
+		return 1;
+	}
+
+	memset(bfr, '\0', bfr_size * sizeof(char));
+
+	f = fopen("/proc/self/stat", "r");
+
+	if(f == NULL){
+		perror("Failed to open /proc/self/stat\n");
+		return 1;
+	}
+
+	if(fgets(bfr, bfr_size, f) == 0){
+		perror("No bytes could be read from /proc/self/stat\n");
+		fclose(f);
+		return 1;
+	}
+
+	strtok_pointer = strtok(bfr, " ");
+	for(int32_t i = 0 ; i < 23 ; i++){
+		strtok_pointer = strtok(NULL, " ");
+	}
+	(*res) = strtol(strtok_pointer, NULL, 10);
+
+	fclose(f);
+
+	return 0;
+}
+
+void timing_and_memory(FILE* f_timing_ptr, FILE* f_memory_ptr){
+	int64_t ns_delta, virtual_mem;
+	if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){perror("Failed to call time_ns_delta\n"); exit(1);} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+	if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){perror("Failed to call virtual_memory_consumption\n"); exit(1);} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+}
+
+int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, const int8_t, const struct matrix* const)){
+	double res1;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e", res1);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+
+int32_t wrap_diversity_1r_0a_no_matrix(struct graph* const g, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, const int8_t)){
+	double res1;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, fp_mode) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e", res1);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+
+int32_t wrap_diversity_2r_1a(struct graph* const g, struct matrix* const m, const double alpha, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, double* const, double, const int8_t, const struct matrix* const)){
+	double res1, res2;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, &res2, alpha, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_1a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e\t%.10e", res1, res2);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+
+int32_t wrap_diversity_2r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, double* const, const int8_t, const struct matrix* const)){
+	double res1, res2;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, &res2, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_0a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e\t%.10e", res1, res2);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+
+int32_t wrap_diversity_2r_0a_long_double_alt(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, long double* const, const int8_t, const struct matrix* const)){
+	double res1;
+	long double res2;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, &res2, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_0a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e\t%.10Le", res1, res2);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+
+/*
+int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double*, const int8_t, struct matrix* const)){
+	double res1;
+	time_t t, delta_t;
+	t = time(NULL);
+	if(df(g, &res1, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
+	delta_t = time(NULL) - t;
+	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	fprintf(f_ptr, "\t%.10e", res1);
+	timing_and_memory(f_timing_ptr, f_memory_ptr);
+	return 0;
+}
+*/
+
+int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database){
 	int32_t err;
 	if(ENABLE_ITERATIVE_DISTANCE_COMPUTATION){
-		size_t local_malloc_size = g->num_nodes * sizeof(float);
-		float* vector = (float*) malloc(local_malloc_size);
-		if(vector == NULL){goto malloc_fail;}
-		memset(vector, '\0', local_malloc_size);
+		size_t local_malloc_size = g->num_nodes * sizeof(float) * ROW_GENERATION_BATCH_SIZE;
+		float* vector_batch = (float*) malloc(local_malloc_size);
+		if(vector_batch == NULL){goto malloc_fail;}
+		memset(vector_batch, '\0', local_malloc_size);
 
+		/*
+		size_t local_malloc_size = g->num_nodes * sizeof(float);
+		float* vector0 = (float*) malloc(local_malloc_size);
+		if(vector0 == NULL){goto malloc_fail;}
+		memset(vector0, '\0', local_malloc_size);
+		*/
+		/*
+		float* vector1 = (float*) malloc(local_malloc_size);
+		if(vector1 == NULL){goto malloc_fail;}
+		memset(vector1, '\0', local_malloc_size);
+
+		float* vector_swaps[] = {vector0, vector1};
+
+		pthread_mutex_t mutexes[2];
+
+		pthread_mutex_init(&(mutexes[0]), NULL);
+		pthread_mutex_init(&(mutexes[1]), NULL);
+		*/
+
+		local_malloc_size = g->num_nodes * sizeof(uint8_t) * ROW_GENERATION_BATCH_SIZE;
+		uint8_t* used = (uint8_t*) malloc(local_malloc_size);
+		if(used == NULL){goto malloc_fail;}
+		memset(used, '\0', local_malloc_size);
+
+		/*
 		local_malloc_size = g->num_nodes * sizeof(uint8_t);
 		uint8_t* used = (uint8_t*) malloc(local_malloc_size);
 		if(used == NULL){goto malloc_fail;}
 		memset(used, '\0', local_malloc_size);
+		*/
 			
 		struct iterative_state_stirling_from_graph iter_state_stirling;
 		struct iterative_state_pairwise_from_graph iter_state_pairwise;
@@ -245,25 +452,78 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 		int32_t i_index = 0;
 		double sum = 0.0;
-		for(uint64_t h = 0 ; h < g->num_nodes ; h++){
+		for(uint64_t h = 0 ; h < g->num_nodes ; h += ROW_GENERATION_BATCH_SIZE){
+			
+			// pthread_mutex_lock(&(mutexes[h%2]));
 			if(ENABLE_MULTITHREADED_ROW_GENERATION){
-				distance_row_from_graph_multithread(g, i_index, vector);
+				// distance_row_from_graph_multithread(g, i_index, vector_swaps[h%2], NUM_ROW_THREADS);
+				distance_row_batch_from_graph_multithread(g, i_index, vector_batch, NUM_ROW_THREADS, ROW_GENERATION_BATCH_SIZE);
 			} else {
-				distance_row_from_graph(g, i_index, vector);
+				// distance_row_from_graph(g, i_index, vector0);
+				// distance_row_from_graph(g, i_index, vector_swaps[h%2]);
+				perror("single-threaded version of row computation has been disabled\n");
+				return 1;
 			}
-			for(uint64_t p = i_index + 1 ; p < g->num_nodes ; p++){
-				sum += (double) vector[p];
+			// pthread_mutex_unlock(&(mutexes[h%2]));
+
+			/* // DO NOT REMOVE
+			// for(uint64_t m = h ; m < g->num_nodes ; m++){
+			for(uint64_t m = 0 ; m < ROW_GENERATION_BATCH_SIZE && h + m < g->num_nodes ; m++){
+				for(uint64_t p = i_index + 1 ; p < g->num_nodes ; p++){
+					sum += (double) vector_batch[m * g->num_nodes + p];
+				}
+	
+				if(ENABLE_STIRLING){iterate_iterative_state_stirling_from_graph(&iter_state_stirling, &(vector_batch[m * g->num_nodes]));}
+				if(ENABLE_PAIRWISE){iterate_iterative_state_pairwise_from_graph(&iter_state_pairwise, &(vector_batch[m * g->num_nodes]));}
+	
+				i_index = h + m + 1;
+				iter_state_stirling.i = i_index;
+				iter_state_pairwise.i = i_index;
+			}
+			*/
+
+			uint64_t actual_row_generation_batch_size = ROW_GENERATION_BATCH_SIZE;
+			if(h + ROW_GENERATION_BATCH_SIZE >= g->num_nodes){
+				actual_row_generation_batch_size = g->num_nodes - h;
 			}
 
-			if(ENABLE_STIRLING){iterate_iterative_state_stirling_from_graph(&iter_state_stirling, vector);}
-			if(ENABLE_PAIRWISE){iterate_iterative_state_pairwise_from_graph(&iter_state_pairwise, vector);}
+			pthread_t agg_threads[ROW_GENERATION_BATCH_SIZE]; // still have full buffer to make it writeable?
+			struct thread_args_aggregator agg_thread_args[ROW_GENERATION_BATCH_SIZE];
+			if(ENABLE_PAIRWISE){
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					struct thread_args_aggregator local_args = (struct thread_args_aggregator) {
+						// .iter_state = (struct iterative_state_pairwise_from_graph*) &iter_state_pairwise,
+						.iter_state.pairwise = &iter_state_pairwise,
+						.i = i_index,
+						.vector = &(vector_batch[m * g->num_nodes]),
+					};
+					memcpy(&(agg_thread_args[m]), &local_args, sizeof(struct thread_args_aggregator));
 
-			i_index = h + 1;
-			iter_state_stirling.i = i_index;
-			iter_state_pairwise.i = i_index;
+					// if(pthread_create(&(agg_threads[m]), &(agg_thread_args[m]), iterate_iterative_state_pairwise_from_graph_avx_thread, NULL) != 0){
+					if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_pairwise_from_graph_avx_thread, &(agg_thread_args[m])) != 0){
+						perror("Failed to call pthread_create\n");
+						return 1;
+					}
+
+					i_index = h + m + 1; // !
+					iter_state_stirling.i = i_index; // !
+					iter_state_pairwise.i = i_index; // !
+				}
+
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					pthread_join(agg_threads[m], NULL);
+				}
+			}
 		}
-		free(vector);
+		// free(vector0);
+		// free(vector1);
+		free(vector_batch);
 		free(used);
+
+		/*
+		pthread_mutex_destroy(&(mutexes[0]));
+		pthread_mutex_destroy(&(mutexes[1]));
+		*/
 
 		// finalise_iterative_state_stirling_from_graph(&iter_state_stirling);
 		finalise_iterative_state_pairwise_from_graph(&iter_state_pairwise);
@@ -281,6 +541,18 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 
 	} else {
+		int64_t ns_delta, virtual_mem;
+
+		if(ENABLE_OUTPUT_TIMING){
+			// fprintf(f_timing_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
+			fprintf(f_timing_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+			if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}
+		}
+		if(ENABLE_OUTPUT_MEMORY){
+			// fprintf(f_memory_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
+			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+		}
+
 		struct matrix m_mst;
 		if(ENABLE_FUNCTIONAL_EVENNESS){
 			if(create_matrix(&m_mst, g->num_nodes, g->num_nodes, FP64) != 0){
@@ -289,29 +561,37 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 			}
 			memset(m_mst.active, '\0', g->num_nodes * g->num_nodes * sizeof(uint8_t));
 			memset(m_mst.active_final, '\0', g->num_nodes * g->num_nodes * sizeof(uint8_t));
+			if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+			if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 		}
 
+		time_t t, delta_t;
+
 		struct matrix m;
-		if(create_matrix(&m, (uint32_t) g->num_nodes, (uint32_t) g->num_nodes, FP32) != 0){
-			perror("failed to call create_matrix\n");
-			return 1;
-		}
-		time_t t = time(NULL);
-		if(ENABLE_MULTITHREADED_MATRIX_GENERATION){
-			if(distance_matrix_from_graph_multithread(g, &m) != 0){
-				perror("failed to call distance_matrix_from_graph_multithread\n");
+		if(ENABLE_DISTANCE_COMPUTATION){
+			if(create_matrix(&m, (uint32_t) g->num_nodes, (uint32_t) g->num_nodes, FP32) != 0){
+				perror("failed to call create_matrix\n");
 				return 1;
 			}
-		} else {
-			// if(distance_matrix_from_graph(g, ANGULAR_MINKOWSKI_DISTANCE_ORDER, &m) != 0){
-			if(distance_matrix_from_graph(g, &m) != 0){
-				perror("failed to call distance_matrix_from_graph\n");
-				return 1;
+			t = time(NULL);
+			if(ENABLE_MULTITHREADED_MATRIX_GENERATION){
+				if(distance_matrix_from_graph_multithread(g, &m, NUM_MATRIX_THREADS) != 0){
+					perror("failed to call distance_matrix_from_graph_multithread\n");
+					return 1;
+				}
+			} else {
+				// if(distance_matrix_from_graph(g, ANGULAR_MINKOWSKI_DISTANCE_ORDER, &m) != 0){
+				if(distance_matrix_from_graph(g, &m) != 0){
+					perror("failed to call distance_matrix_from_graph\n");
+					return 1;
+				}
 			}
-		}
-		time_t delta_t = time(NULL) - t;
-		if(ENABLE_TIMINGS){
-			printf("[log] [time] Computed matrix in %lis\n", delta_t);
+			if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+			if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+			delta_t = time(NULL) - t;
+			if(ENABLE_TIMINGS){
+				printf("[log] [time] Computed matrix in %lis\n", delta_t);
+			}
 		}
 
 		if((*mst_initialised)){
@@ -323,10 +603,10 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 		struct graph_distance_heap local_heap;
 
-		double mu_dist;
-		double sigma_dist;
-		float mu_dist_fp32;
-		float sigma_dist_fp32;
+		double mu_dist = NAN;
+		double sigma_dist = NAN;
+		float mu_dist_fp32 = NAN;
+		float sigma_dist_fp32 = NAN;
 		if(ENABLE_FUNCTIONAL_EVENNESS){
 			err = create_graph_distance_heap(&local_heap, g, GRAPH_NODE_FP32, &m);
 			if(err != 0){
@@ -335,216 +615,278 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 			}
 	
 			(*heap) = local_heap;
+
+			if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+			if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 		}
 
-		switch(m.fp_mode){
-			case FP32:
-				avg_and_std_fp32(m.bfr.fp32, m.a * m.b, &mu_dist_fp32, &sigma_dist_fp32);
-				mu_dist = (double) mu_dist_fp32;
-				sigma_dist = (double) sigma_dist_fp32;
-				break;
-			case FP64:
-				avg_and_std_fp64(m.bfr.fp64, m.a * m.b, &mu_dist, &sigma_dist);
-				break;
-			default:
-				perror("unknown FP mode\n");
-				return 1;
+		if(ENABLE_DISTANCE_COMPUTATION){
+			switch(m.fp_mode){
+				case FP32:
+					avg_and_std_fp32(m.bfr.fp32, m.a * m.b, &mu_dist_fp32, &sigma_dist_fp32);
+					mu_dist = (double) mu_dist_fp32;
+					sigma_dist = (double) sigma_dist_fp32;
+					break;
+				case FP64:
+					avg_and_std_fp64(m.bfr.fp64, m.a * m.b, &mu_dist, &sigma_dist);
+					break;
+				default:
+					perror("unknown FP mode\n");
+					return 1;
+			}
+			if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+			if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 		}
 
 		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
 
-		if(ENABLE_FUNCTIONAL_EVENNESS){
-			t = time(NULL);
-			struct minimum_spanning_tree local_mst;
-
-			err = create_minimum_spanning_tree(&local_mst, &local_heap);
-			if(err != 0){
-				perror("failed to call create_minimum_spanning_tree\n");
-				return EXIT_FAILURE;
+		if(ENABLE_DISPARITY_FUNCTIONS){
+			if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}}
+	
+			if(ENABLE_FUNCTIONAL_EVENNESS){
+				t = time(NULL);
+				struct minimum_spanning_tree local_mst;
+	
+				err = create_minimum_spanning_tree(&local_mst, &local_heap);
+				if(err != 0){
+					perror("failed to call create_minimum_spanning_tree\n");
+					return EXIT_FAILURE;
+				}
+	
+				err = calculate_minimum_spanning_tree(&local_mst, &m_mst, MST_PRIMS_ALGORITHM);
+				if(err != 0){
+					perror("failed to call calculate_minimum_spanning_tree\n");
+					return EXIT_FAILURE;	
+				}
+				
+				(*mst) = local_mst;
+				(*mst_initialised) = 1;
+	
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed MST in %lis\n", delta_t);
+				}
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
-
-			err = calculate_minimum_spanning_tree(&local_mst, &m_mst, MST_PRIMS_ALGORITHM);
-			if(err != 0){
-				perror("failed to call calculate_minimum_spanning_tree\n");
-				return EXIT_FAILURE;	
+			(*previous_g_num_nodes_p) = g->num_nodes;
+	
+			if(ENABLE_STIRLING){
+				double stirling;
+				t = time(NULL);
+				err = stirling_from_graph(g, &stirling, STIRLING_ALPHA, STIRLING_BETA, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call stirling_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed Stirling in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", stirling);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
-			
-			(*mst) = local_mst;
-			(*mst_initialised) = 1;
-
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed MST in %lis\n", delta_t);
+	
+			if(ENABLE_RICOTTA_SZEIDL){
+				double ricotta_szeidl;
+				t = time(NULL);
+				err = ricotta_szeidl_from_graph(g, &ricotta_szeidl, RICOTTA_SZEIDL_ALPHA, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call ricotta_szeidl_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed Ricotta-Szeidl in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", ricotta_szeidl);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
-		}
-		(*previous_g_num_nodes_p) = g->num_nodes;
-
-		if(ENABLE_STIRLING){
-			double stirling;
-			t = time(NULL);
-			err = stirling_from_graph(g, &stirling, STIRLING_ALPHA, STIRLING_BETA, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call stirling_from_graph\n");
-				return EXIT_FAILURE;
+	
+			if(ENABLE_PAIRWISE){
+				/*
+				double pairwise;
+				t = time(NULL);
+				err = pairwise_from_graph(g, &pairwise, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call pairwise_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed pairwise in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", pairwise);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				if(wrap_diversity_1r_0a(g, &m, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, pairwise_from_graph) != 0){return 1;}
 			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed Stirling in %lis\n", delta_t);
+	
+			if(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){
+				/*
+				double chao_et_al_functional_diversity;
+				double chao_et_al_functional_hill_number;
+				t = time(NULL);
+				err = chao_et_al_functional_diversity_from_graph(g, &chao_et_al_functional_diversity, &chao_et_al_functional_hill_number, CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call chao_et_al_functional_diversity_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed Chao et al. in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e\t%.10e", chao_et_al_functional_diversity, chao_et_al_functional_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				if(wrap_diversity_2r_1a(g, &m, CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, chao_et_al_functional_diversity_from_graph) != 0){return 1;}
 			}
-			fprintf(f_ptr, "\t%.10e", stirling);
-		}
-
-		if(ENABLE_RICOTTA_SZEIDL){
-			double ricotta_szeidl;
-			t = time(NULL);
-			err = ricotta_szeidl_from_graph(g, &ricotta_szeidl, RICOTTA_SZEIDL_ALPHA, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call ricotta_szeidl_from_graph\n");
-				return EXIT_FAILURE;
+	
+			if(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){
+				/*
+				double scheiner_species_phylogenetic_functional_diversity;
+				double scheiner_species_phylogenetic_functional_hill_number;
+				t = time(NULL);
+				err = scheiner_species_phylogenetic_functional_diversity_from_graph(g, &scheiner_species_phylogenetic_functional_diversity, &scheiner_species_phylogenetic_functional_hill_number, SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call scheiner_species_phylogenetic_functional_diversity_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed Scheiner in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e\t%.10e", scheiner_species_phylogenetic_functional_diversity, scheiner_species_phylogenetic_functional_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				if(wrap_diversity_2r_1a(g, &m, SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, scheiner_species_phylogenetic_functional_diversity_from_graph) != 0){return 1;}
 			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed Ricotta-Szeidl in %lis\n", delta_t);
+	
+			if(ENABLE_LEINSTER_COBBOLD_DIVERSITY){
+				/*
+				double leinster_cobbold_diversity;
+				double leinster_cobbold_hill_number;
+				t = time(NULL);
+				err = leinster_cobbold_diversity_from_graph(g, &leinster_cobbold_diversity, &leinster_cobbold_hill_number, LEINSTER_COBBOLD_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call leinster_cobbold_diversity_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed Leinster-Cobbold in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e\t%.10e", leinster_cobbold_diversity, leinster_cobbold_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				if(wrap_diversity_2r_1a(g, &m, LEINSTER_COBBOLD_DIVERSITY_ALPHA, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, leinster_cobbold_diversity_from_graph) != 0){return 1;}
 			}
-			fprintf(f_ptr, "\t%.10e", ricotta_szeidl);
-		}
-
-		if(ENABLE_PAIRWISE){
-			double pairwise;
-			t = time(NULL);
-			err = pairwise_from_graph(g, &pairwise, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call pairwise_from_graph\n");
-				return EXIT_FAILURE;
+	
+			if(ENABLE_LEXICOGRAPHIC){
+				/*
+				double lexicographic;
+				long double lexicographic_hybrid_scheiner;
+				t = time(NULL);
+				err = lexicographic_from_graph(g, &lexicographic, &lexicographic_hybrid_scheiner, GRAPH_NODE_FP32, &m);
+				if(err != 0){
+					perror("failed to call lexicographic_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed lexicographic in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e\t%.10Le", lexicographic, lexicographic_hybrid_scheiner);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				if(wrap_diversity_2r_0a_long_double_alt(g, &m, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, lexicographic_from_graph) != 0){return 1;}
 			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed pairwise in %lis\n", delta_t);
+	
+			if(ENABLE_FUNCTIONAL_EVENNESS){
+				if(!(*mst_initialised)){
+					perror("mst not initialised\n");
+					return 1;
+				}
+				double functional_evenness;
+				t = time(NULL);
+				err = functional_evenness_from_minimum_spanning_tree(mst, &functional_evenness);
+				if(err != 0){
+					perror("failed to call functional_evenness_from_minimum_spanning_tree\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed FEve in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", functional_evenness);
+				/*
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				*/
+				timing_and_memory(f_timing_ptr, f_memory_ptr);
 			}
-			fprintf(f_ptr, "\t%.10e", pairwise);
-		}
-
-		if(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){
-			double chao_et_al_functional_diversity;
-			double chao_et_al_functional_hill_number;
-			t = time(NULL);
-			err = chao_et_al_functional_diversity_from_graph(g, &chao_et_al_functional_diversity, &chao_et_al_functional_hill_number, CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call chao_et_al_functional_diversity_from_graph\n");
-				return EXIT_FAILURE;
+	
+			if(ENABLE_FUNCTIONAL_DISPERSION){
+				/*
+				double functional_dispersion;
+				t = time(NULL);
+				err = functional_dispersion_from_graph(g, &functional_dispersion, GRAPH_NODE_FP32);
+				if(err != 0){
+					perror("failed to call functional_dispersion_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed FDisp in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", functional_dispersion);
+				// if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				// if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				timing_and_memory(f_timing_ptr, f_memory_ptr);
+				*/
+				if(wrap_diversity_1r_0a_no_matrix(g, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, functional_dispersion_from_graph) != 0){return 1;}
 			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed Chao et al. in %lis\n", delta_t);
+	
+			if(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){
+				/*
+				double functional_divergence_modified;
+				t = time(NULL);
+				err = functional_divergence_modified_from_graph(g, &functional_divergence_modified, GRAPH_NODE_FP32);
+				if(err != 0){
+					perror("failed to call functional_divergence_modified_from_graph\n");
+					return EXIT_FAILURE;
+				}
+				delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){
+					printf("[log] [time] Computed FDiv in %lis\n", delta_t);
+				}
+				fprintf(f_ptr, "\t%.10e", functional_divergence_modified);
+				// if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				// if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+				timing_and_memory(f_timing_ptr, f_memory_ptr);
+				*/
+				if(wrap_diversity_1r_0a_no_matrix(g, GRAPH_NODE_FP32, f_ptr, f_timing_ptr, f_memory_ptr, functional_divergence_modified_from_graph) != 0){return 1;}
 			}
-			fprintf(f_ptr, "\t%.10e\t%.10e", chao_et_al_functional_diversity, chao_et_al_functional_hill_number);
-		}
-
-		if(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){
-			double scheiner_species_phylogenetic_functional_diversity;
-			double scheiner_species_phylogenetic_functional_hill_number;
-			t = time(NULL);
-			err = scheiner_species_phylogenetic_functional_diversity_from_graph(g, &scheiner_species_phylogenetic_functional_diversity, &scheiner_species_phylogenetic_functional_hill_number, SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call scheiner_species_phylogenetic_functional_diversity_from_graph\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed Scheiner in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e\t%.10e", scheiner_species_phylogenetic_functional_diversity, scheiner_species_phylogenetic_functional_hill_number);
-		}
-
-		if(ENABLE_LEINSTER_COBBOLD_DIVERSITY){
-			double leinster_cobbold_diversity;
-			double leinster_cobbold_hill_number;
-			t = time(NULL);
-			err = leinster_cobbold_diversity_from_graph(g, &leinster_cobbold_diversity, &leinster_cobbold_hill_number, LEINSTER_COBBOLD_DIVERSITY_ALPHA, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call leinster_cobbold_diversity_from_graph\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed Leinster-Cobbold in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e\t%.10e", leinster_cobbold_diversity, leinster_cobbold_hill_number);
-		}
-
-		if(ENABLE_LEXICOGRAPHIC){
-			double lexicographic;
-			long double lexicographic_hybrid_scheiner;
-			t = time(NULL);
-			err = lexicographic_from_graph(g, &lexicographic, &lexicographic_hybrid_scheiner, GRAPH_NODE_FP32, &m);
-			if(err != 0){
-				perror("failed to call lexicographic_from_graph\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed lexicographic in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e\t%.10Le", lexicographic, lexicographic_hybrid_scheiner);
-		}
-
-		if(ENABLE_FUNCTIONAL_EVENNESS){
-			if(!(*mst_initialised)){
-				perror("mst not initialised\n");
-				return 1;
-			}
-			double functional_evenness;
-			t = time(NULL);
-			err = functional_evenness_from_minimum_spanning_tree(mst, &functional_evenness);
-			if(err != 0){
-				perror("failed to call functional_evenness_from_minimum_spanning_tree\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed FEve in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e", functional_evenness);
-		}
-
-		if(ENABLE_FUNCTIONAL_DISPERSION){
-			double functional_dispersion;
-			t = time(NULL);
-			err = functional_dispersion_from_graph(g, &functional_dispersion, GRAPH_NODE_FP32);
-			if(err != 0){
-				perror("failed to call functional_dispersion_from_graph\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed FDisp in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e", functional_dispersion);
-		}
-
-		if(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){
-			double functional_divergence_modified;
-			t = time(NULL);
-			err = functional_divergence_modified_from_graph(g, &functional_divergence_modified, GRAPH_NODE_FP32);
-			if(err != 0){
-				perror("failed to call functional_divergence_modified_from_graph\n");
-				return EXIT_FAILURE;
-			}
-			delta_t = time(NULL) - t;
-			if(ENABLE_TIMINGS){
-				printf("[log] [time] Computed FDiv in %lis\n", delta_t);
-			}
-			fprintf(f_ptr, "\t%.10e", functional_divergence_modified);
 		}
 
 		if(ENABLE_NON_DISPARITY_FUNCTIONS){
 			if(ENABLE_SHANNON_WEAVER_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				shannon_weaver_entropy_from_graph(g, &res);
+				shannon_weaver_entropy_from_graph(g, &res_entropy, &res_hill_number);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed SW entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_GOOD_ENTROPY){
 				double res;
@@ -553,22 +895,41 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Good entropy in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_RENYI_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				renyi_entropy_from_graph(g, &res, RENYI_ALPHA);
+				renyi_entropy_from_graph(g, &res_entropy, &res_hill_number, RENYI_ALPHA);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Renyi entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_PATIL_TAILLIE_ENTROPY){
-				double res;
+				double res_entropy;
+				double res_hill_number;
 				time_t t = time(NULL);
-				patil_taillie_entropy_from_graph(g, &res, PATIL_TAILLIE_ALPHA);
+				patil_taillie_entropy_from_graph(g, &res_entropy, &res_hill_number, PATIL_TAILLIE_ALPHA);
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Patil-Taillie entropy in %lis\n", delta_t);}
-				fprintf(f_ptr, "\t%.10e", res);
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
+			}
+			if(ENABLE_Q_LOGARITHMIC_ENTROPY){
+				double res_entropy;
+				double res_hill_number;
+				time_t t = time(NULL);
+				q_logarithmic_entropy_from_graph(g, &res_entropy, &res_hill_number, Q_LOGARITHMIC_Q);
+				time_t delta_t = time(NULL) - t;
+				if(ENABLE_TIMINGS){printf("[log] [time] Computed q-logarithmic entropy in %lis\n", delta_t);}
+				fprintf(f_ptr, "\t%.10e\t%.10e", res_entropy, res_hill_number);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SIMPSON_INDEX){
 				double res;
@@ -577,6 +938,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Simpson index in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SIMPSON_DOMINANCE_INDEX){
 				double res;
@@ -585,6 +948,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Simpson dominance index in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_HILL_NUMBER_STANDARD){
 				double res;
@@ -593,6 +958,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Hill number (standard) in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_HILL_EVENNESS){
 				double res;
@@ -601,6 +968,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Hill evenness in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_BERGER_PARKER_INDEX){
 				double res;
@@ -609,6 +978,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Berger Parker index in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_JUNGE1994_PAGE22){
 				double res;
@@ -617,6 +988,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Junge 1994 p22 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_BRILLOUIN_DIVERSITY){
 				double res;
@@ -626,6 +999,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed Brillouin diversity in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_MCINTOSH_INDEX){
 				double res;
@@ -634,6 +1009,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed McIntosh index in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975){
 				double res;
@@ -642,6 +1019,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) entropy over log n species Pielou 1975 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_HEIP){
 				double res;
@@ -650,6 +1029,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E Heip in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_ONE_MINUS_D){
 				double res;
@@ -658,6 +1039,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E one minus D in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964){
 				double res;
@@ -666,6 +1049,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E one over ln D Williams 1964 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_MINUS_LN_D_PIELOU1977){
 				double res;
@@ -674,6 +1059,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E minus ln D Pielou 1977 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_F_2_1_ALATALO1981){
 				double res;
@@ -682,6 +1069,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) F_2_1 Alatalo 1981 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_G_2_1_MOLINARI1989){
 				double res;
@@ -690,6 +1079,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) G_2_1 Molinari 1989 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_BULLA1994){
 				double res;
@@ -698,6 +1089,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E Bulla 1994 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_O_BULLA1994){
 				double res;
@@ -706,6 +1099,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) O bulla 1994 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_MCI_PIELOU1969){
 				double res;
@@ -714,6 +1109,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E MCI Pielou 1969 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_PRIME_CAMARGO1993){
 				double res;
@@ -722,6 +1119,8 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E prime Camargo 1993 in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 			if(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL){
 				double res;
@@ -730,18 +1129,32 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 				time_t delta_t = time(NULL) - t;
 				if(ENABLE_TIMINGS){printf("[log] [time] Computed (SW) E var Smith and Wilson 1996 original in %lis\n", delta_t);}
 				fprintf(f_ptr, "\t%.10e", res);
+				if(ENABLE_OUTPUT_TIMING){if(time_ns_delta(&ns_delta) != 0){goto time_ns_delta_failure;} else {fprintf(f_timing_ptr, "\t%li", ns_delta);}}
+				if(ENABLE_OUTPUT_MEMORY){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 			}
 		}
 
 		fprintf(f_ptr, "\n");
+		if(ENABLE_OUTPUT_TIMING){fprintf(f_timing_ptr, "\n");}
+		if(ENABLE_OUTPUT_MEMORY){fprintf(f_memory_ptr, "\n");}
 
-		free_matrix(&m);
-		if(ENABLE_FUNCTIONAL_EVENNESS){
-			free_matrix(&m_mst);
+		if(ENABLE_DISTANCE_COMPUTATION){
+			free_matrix(&m);
+			if(ENABLE_FUNCTIONAL_EVENNESS){
+				free_matrix(&m_mst);
+			}
 		}
 	}
 
 	return 0;
+
+	time_ns_delta_failure:
+	perror("Failed to call time_ns_delta\n");
+	return 1;
+
+	virtual_memory_consumption_failure:
+	perror("Failed to call virtual_memory_consumption\n");
+	return 1;
 
 	malloc_fail:
 	perror("malloc failed\n");
@@ -749,6 +1162,9 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 }
 
 int32_t measurement(struct word2vec* w2v, int32_t ud_column){
+	stacked_sentence_count_target = log(stacked_sentence_count_log10) / log(10.0);
+	stacked_document_count_target = log(stacked_document_count_log10) / log(10.0);
+
 	struct sorted_array sorted_array_discarded_because_not_in_vector_database;
 	if(create_sorted_array(&sorted_array_discarded_because_not_in_vector_database, 0, sizeof(struct sorted_array_str_int_element), sorted_array_str_int_cmp) != 0){
 		perror("failed to call create_sorted_array\n");
@@ -811,28 +1227,27 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 	char** input_paths_true_positives = NULL;
 
 	FILE* f_ptr = fopen(OUTPUT_PATH, "w");
-	if(f_ptr == NULL){
-		perror("failed to open file\n");
-		return EXIT_FAILURE;
-	}
+	if(f_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", OUTPUT_PATH); return EXIT_FAILURE;}
 	fprintf(f_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
-	if(ENABLE_STIRLING){fprintf(f_ptr, "\tstirling_alpha%.10e_beta%.10e", STIRLING_ALPHA, STIRLING_BETA);}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_RICOTTA_SZEIDL){fprintf(f_ptr, "\tricotta_szeidl_alpha%.10e", RICOTTA_SZEIDL_ALPHA);}
-	if(ENABLE_PAIRWISE){fprintf(f_ptr, "\tpairwise");}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){fprintf(f_ptr, "\tchao_et_al_functional_diversity_alpha%.10e\tchao_et_al_functional_hill_number_alpha%.10e", CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA, CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA);}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){fprintf(f_ptr, "\tscheiner_species_phylogenetic_functional_diversity_alpha%.10e\tscheiner_species_phylogenetic_functional_hill_number_alpha%.10e", SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA, SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA);}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEINSTER_COBBOLD_DIVERSITY){fprintf(f_ptr, "\tleinster_cobbold_diversity_alpha%.10e\tleinster_cobbold_hill_number_alpha%.10e", LEINSTER_COBBOLD_DIVERSITY_ALPHA, LEINSTER_COBBOLD_DIVERSITY_ALPHA);}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEXICOGRAPHIC){fprintf(f_ptr, "\tlexicographic\tlexicographic_hybrid_scheiner");}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_ptr, "\tfunctional_evenness");}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DISPERSION){fprintf(f_ptr, "\tfunctional_dispersion");}
-	if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){fprintf(f_ptr, "\tfunctional_divergence_modified");}
 
-
+	if(ENABLE_DISPARITY_FUNCTIONS){
+		if(ENABLE_STIRLING){fprintf(f_ptr, "\tstirling_alpha%.10e_beta%.10e", STIRLING_ALPHA, STIRLING_BETA);}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_RICOTTA_SZEIDL){fprintf(f_ptr, "\tricotta_szeidl_alpha%.10e", RICOTTA_SZEIDL_ALPHA);}
+		if(ENABLE_PAIRWISE){fprintf(f_ptr, "\tpairwise");}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){fprintf(f_ptr, "\tchao_et_al_functional_diversity_alpha%.10e\tchao_et_al_functional_hill_number_alpha%.10e", CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA, CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA);}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){fprintf(f_ptr, "\tscheiner_species_phylogenetic_functional_diversity_alpha%.10e\tscheiner_species_phylogenetic_functional_hill_number_alpha%.10e", SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA, SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA);}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEINSTER_COBBOLD_DIVERSITY){fprintf(f_ptr, "\tleinster_cobbold_diversity_alpha%.10e\tleinster_cobbold_hill_number_alpha%.10e", LEINSTER_COBBOLD_DIVERSITY_ALPHA, LEINSTER_COBBOLD_DIVERSITY_ALPHA);}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEXICOGRAPHIC){fprintf(f_ptr, "\tlexicographic\tlexicographic_hybrid_scheiner");}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_ptr, "\tfunctional_evenness");}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DISPERSION){fprintf(f_ptr, "\tfunctional_dispersion");}
+		if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){fprintf(f_ptr, "\tfunctional_divergence_modified");}
+	}
 	if(ENABLE_NON_DISPARITY_FUNCTIONS){
-		if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_ptr, "\tshannon_weaver_entropy");}
+		if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_ptr, "\tshannon_weaver_entropy\tshannon_weaver_hill_number");}
 		if(ENABLE_GOOD_ENTROPY){fprintf(f_ptr, "\tgood_entropy_alpha%.4e_beta%.4e", GOOD_ALPHA, GOOD_BETA);}
-		if(ENABLE_RENYI_ENTROPY){fprintf(f_ptr, "\trenyi_entropy_alpha%.4e", RENYI_ALPHA);}
-		if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_ptr, "\tpatil_taillie_entropy_alpha%.4e", PATIL_TAILLIE_ALPHA);}
+		if(ENABLE_RENYI_ENTROPY){fprintf(f_ptr, "\trenyi_entropy_alpha%.4e\trenyi_hill_number_alpha%.4e", RENYI_ALPHA, RENYI_ALPHA);}
+		if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_ptr, "\tpatil_taillie_entropy_alpha%.4e\tpatil_taillie_hill_number_alpha%.4e", PATIL_TAILLIE_ALPHA, PATIL_TAILLIE_ALPHA);}
+		if(ENABLE_Q_LOGARITHMIC_ENTROPY){fprintf(f_ptr, "\tq_logarithmic_entropy_alpha%.4e\tq_logarithmic_hill_number_alpha%.4e", Q_LOGARITHMIC_Q, Q_LOGARITHMIC_Q);}
 		if(ENABLE_SIMPSON_INDEX){fprintf(f_ptr, "\tsimpson_index");}
 		if(ENABLE_SIMPSON_DOMINANCE_INDEX){fprintf(f_ptr, "\tsimpson_dominance_index");}
 		if(ENABLE_HILL_NUMBER_STANDARD){fprintf(f_ptr, "\thill_number_standard_alpha%.4e", HILL_NUMBER_STANDARD_ALPHA);}
@@ -854,8 +1269,121 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 		if(ENABLE_SW_E_PRIME_CAMARGO1993){fprintf(f_ptr, "\tsw_e_prime_camargo1993");}
 		if(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL){fprintf(f_ptr, "\tsw_e_var_smith_and_wilson1996_original");}
 	}
-
 	fprintf(f_ptr, "\n");
+
+	FILE* f_timing_ptr = NULL;
+	if(ENABLE_OUTPUT_TIMING){
+		f_timing_ptr = fopen(OUTPUT_PATH_TIMING, "w");
+		if(f_timing_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", OUTPUT_PATH_TIMING); return EXIT_FAILURE;}
+		// fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+		fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn");
+
+		if(ENABLE_DISPARITY_FUNCTIONS){
+			// ----
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_timing_ptr, "\tm_mst_creation");}
+			if(ENABLE_DISTANCE_COMPUTATION){fprintf(f_timing_ptr, "\tdist_matrix_computation");}
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_timing_ptr, "\tdist_heap_computation");}
+			if(ENABLE_DISTANCE_COMPUTATION){fprintf(f_timing_ptr, "\tdist_stat_computation");}
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_timing_ptr, "\tmst_computation");}
+			// ----
+
+			if(ENABLE_STIRLING){fprintf(f_timing_ptr, "\tstirling_alpha%.10e_beta%.10e", STIRLING_ALPHA, STIRLING_BETA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_RICOTTA_SZEIDL){fprintf(f_timing_ptr, "\tricotta_szeidl_alpha%.10e", RICOTTA_SZEIDL_ALPHA);}
+			if(ENABLE_PAIRWISE){fprintf(f_timing_ptr, "\tpairwise");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){fprintf(f_timing_ptr, "\tchao_et_al_functional_diversity_alpha%.10e", CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){fprintf(f_timing_ptr, "\tscheiner_species_phylogenetic_functional_diversity_alpha%.10e", SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEINSTER_COBBOLD_DIVERSITY){fprintf(f_timing_ptr, "\tleinster_cobbold_diversity_alpha%.10e", LEINSTER_COBBOLD_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEXICOGRAPHIC){fprintf(f_timing_ptr, "\tlexicographic");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_timing_ptr, "\tfunctional_evenness");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DISPERSION){fprintf(f_timing_ptr, "\tfunctional_dispersion");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){fprintf(f_timing_ptr, "\tfunctional_divergence_modified");}
+		}
+		if(ENABLE_NON_DISPARITY_FUNCTIONS){
+			if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_timing_ptr, "\tshannon_weaver_entropy");}
+			if(ENABLE_GOOD_ENTROPY){fprintf(f_timing_ptr, "\tgood_entropy_alpha%.4e_beta%.4e", GOOD_ALPHA, GOOD_BETA);}
+			if(ENABLE_RENYI_ENTROPY){fprintf(f_timing_ptr, "\trenyi_entropy_alpha%.4e", RENYI_ALPHA);}
+			if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_timing_ptr, "\tpatil_taillie_entropy_alpha%.4e", PATIL_TAILLIE_ALPHA);}
+			if(ENABLE_Q_LOGARITHMIC_ENTROPY){fprintf(f_timing_ptr, "\tq_logarithmic_entropy_alpha%.4e", Q_LOGARITHMIC_Q);}
+			if(ENABLE_SIMPSON_INDEX){fprintf(f_timing_ptr, "\tsimpson_index");}
+			if(ENABLE_SIMPSON_DOMINANCE_INDEX){fprintf(f_timing_ptr, "\tsimpson_dominance_index");}
+			if(ENABLE_HILL_NUMBER_STANDARD){fprintf(f_timing_ptr, "\thill_number_standard_alpha%.4e", HILL_NUMBER_STANDARD_ALPHA);}
+			if(ENABLE_HILL_EVENNESS){fprintf(f_timing_ptr, "\thill_evenness_alpha%.4e_beta%.4e", HILL_EVENNESS_ALPHA, HILL_EVENNESS_BETA);}
+			if(ENABLE_BERGER_PARKER_INDEX){fprintf(f_timing_ptr, "\tberger_parker_index");}
+			if(ENABLE_JUNGE1994_PAGE22){fprintf(f_timing_ptr, "\tjunge1994_page22");}
+			if(ENABLE_BRILLOUIN_DIVERSITY){fprintf(f_timing_ptr, "\tbrillouin_diversity");}
+			if(ENABLE_MCINTOSH_INDEX){fprintf(f_timing_ptr, "\tmcintosh_index");}
+			if(ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975){fprintf(f_timing_ptr, "\tsw_entropy_over_log_n_species_pielou1975");}
+			if(ENABLE_SW_E_HEIP){fprintf(f_timing_ptr, "\tsw_e_heip");}
+			if(ENABLE_SW_E_ONE_MINUS_D){fprintf(f_timing_ptr, "\te_one_minus_D");}
+			if(ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964){fprintf(f_timing_ptr, "\te_one_over_ln_D_williams1964");}
+			if(ENABLE_SW_E_MINUS_LN_D_PIELOU1977){fprintf(f_timing_ptr, "\te_minus_ln_D_pielou1977");}
+			if(ENABLE_SW_F_2_1_ALATALO1981){fprintf(f_timing_ptr, "\tsw_f_2_1_alatalo1981");}
+			if(ENABLE_SW_G_2_1_MOLINARI1989){fprintf(f_timing_ptr, "\tsw_g_2_1_molinari1989");}
+			if(ENABLE_SW_E_BULLA1994){fprintf(f_timing_ptr, "\tsw_e_bulla1994");}
+			if(ENABLE_SW_O_BULLA1994){fprintf(f_timing_ptr, "\tsw_o_bulla1994");}
+			if(ENABLE_SW_E_MCI_PIELOU1969){fprintf(f_timing_ptr, "\tsw_e_mci_pielou1969");}
+			if(ENABLE_SW_E_PRIME_CAMARGO1993){fprintf(f_timing_ptr, "\tsw_e_prime_camargo1993");}
+			if(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL){fprintf(f_timing_ptr, "\tsw_e_var_smith_and_wilson1996_original");}
+		}
+		fprintf(f_timing_ptr, "\n");
+	}
+
+	FILE* f_memory_ptr = NULL;
+	if(ENABLE_OUTPUT_MEMORY){
+		f_memory_ptr = fopen(OUTPUT_PATH_MEMORY, "w");
+		if(f_memory_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", OUTPUT_PATH_MEMORY); return EXIT_FAILURE;}
+		// fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+		fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn");
+
+		if(ENABLE_DISPARITY_FUNCTIONS){
+			// ----
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_memory_ptr, "\tm_mst_creation");}
+			if(ENABLE_DISTANCE_COMPUTATION){fprintf(f_memory_ptr, "\tdist_matrix_computation");}
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_memory_ptr, "\tdist_heap_computation");}
+			if(ENABLE_DISTANCE_COMPUTATION){fprintf(f_memory_ptr, "\tdist_stat_computation");}
+			if(ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_memory_ptr, "\tmst_computation");}
+			// ----
+	
+			if(ENABLE_STIRLING){fprintf(f_memory_ptr, "\tstirling_alpha%.10e_beta%.10e", STIRLING_ALPHA, STIRLING_BETA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_RICOTTA_SZEIDL){fprintf(f_memory_ptr, "\tricotta_szeidl_alpha%.10e", RICOTTA_SZEIDL_ALPHA);}
+			if(ENABLE_PAIRWISE){fprintf(f_memory_ptr, "\tpairwise");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY){fprintf(f_memory_ptr, "\tchao_et_al_functional_diversity_alpha%.10e", CHAO_ET_AL_FUNCTIONAL_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY){fprintf(f_memory_ptr, "\tscheiner_species_phylogenetic_functional_diversity_alpha%.10e", SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEINSTER_COBBOLD_DIVERSITY){fprintf(f_memory_ptr, "\tleinster_cobbold_diversity_alpha%.10e", LEINSTER_COBBOLD_DIVERSITY_ALPHA);}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_LEXICOGRAPHIC){fprintf(f_memory_ptr, "\tlexicographic");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_EVENNESS){fprintf(f_memory_ptr, "\tfunctional_evenness");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DISPERSION){fprintf(f_memory_ptr, "\tfunctional_dispersion");}
+			if(!ENABLE_ITERATIVE_DISTANCE_COMPUTATION && ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED){fprintf(f_memory_ptr, "\tfunctional_divergence_modified");}
+		}
+		if(ENABLE_NON_DISPARITY_FUNCTIONS){
+			if(ENABLE_SHANNON_WEAVER_ENTROPY){fprintf(f_memory_ptr, "\tshannon_weaver_entropy");}
+			if(ENABLE_GOOD_ENTROPY){fprintf(f_memory_ptr, "\tgood_entropy_alpha%.4e_beta%.4e", GOOD_ALPHA, GOOD_BETA);}
+			if(ENABLE_RENYI_ENTROPY){fprintf(f_memory_ptr, "\trenyi_entropy_alpha%.4e", RENYI_ALPHA);}
+			if(ENABLE_PATIL_TAILLIE_ENTROPY){fprintf(f_memory_ptr, "\tpatil_taillie_entropy_alpha%.4e", PATIL_TAILLIE_ALPHA);}
+			if(ENABLE_Q_LOGARITHMIC_ENTROPY){fprintf(f_memory_ptr, "\tq_logarithmic_entropy_alpha%.4e", Q_LOGARITHMIC_Q);}
+			if(ENABLE_SIMPSON_INDEX){fprintf(f_memory_ptr, "\tsimpson_index");}
+			if(ENABLE_SIMPSON_DOMINANCE_INDEX){fprintf(f_memory_ptr, "\tsimpson_dominance_index");}
+			if(ENABLE_HILL_NUMBER_STANDARD){fprintf(f_memory_ptr, "\thill_number_standard_alpha%.4e", HILL_NUMBER_STANDARD_ALPHA);}
+			if(ENABLE_HILL_EVENNESS){fprintf(f_memory_ptr, "\thill_evenness_alpha%.4e_beta%.4e", HILL_EVENNESS_ALPHA, HILL_EVENNESS_BETA);}
+			if(ENABLE_BERGER_PARKER_INDEX){fprintf(f_memory_ptr, "\tberger_parker_index");}
+			if(ENABLE_JUNGE1994_PAGE22){fprintf(f_memory_ptr, "\tjunge1994_page22");}
+			if(ENABLE_BRILLOUIN_DIVERSITY){fprintf(f_memory_ptr, "\tbrillouin_diversity");}
+			if(ENABLE_MCINTOSH_INDEX){fprintf(f_memory_ptr, "\tmcintosh_index");}
+			if(ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975){fprintf(f_memory_ptr, "\tsw_entropy_over_log_n_species_pielou1975");}
+			if(ENABLE_SW_E_HEIP){fprintf(f_memory_ptr, "\tsw_e_heip");}
+			if(ENABLE_SW_E_ONE_MINUS_D){fprintf(f_memory_ptr, "\te_one_minus_D");}
+			if(ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964){fprintf(f_memory_ptr, "\te_one_over_ln_D_williams1964");}
+			if(ENABLE_SW_E_MINUS_LN_D_PIELOU1977){fprintf(f_memory_ptr, "\te_minus_ln_D_pielou1977");}
+			if(ENABLE_SW_F_2_1_ALATALO1981){fprintf(f_memory_ptr, "\tsw_f_2_1_alatalo1981");}
+			if(ENABLE_SW_G_2_1_MOLINARI1989){fprintf(f_memory_ptr, "\tsw_g_2_1_molinari1989");}
+			if(ENABLE_SW_E_BULLA1994){fprintf(f_memory_ptr, "\tsw_e_bulla1994");}
+			if(ENABLE_SW_O_BULLA1994){fprintf(f_memory_ptr, "\tsw_o_bulla1994");}
+			if(ENABLE_SW_E_MCI_PIELOU1969){fprintf(f_memory_ptr, "\tsw_e_mci_pielou1969");}
+			if(ENABLE_SW_E_PRIME_CAMARGO1993){fprintf(f_memory_ptr, "\tsw_e_prime_camargo1993");}
+			if(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL){fprintf(f_memory_ptr, "\tsw_e_var_smith_and_wilson1996_original");}
+		}
+		fprintf(f_memory_ptr, "\n");
+	}
 
 
 	int32_t num_nodes = 0;
@@ -882,11 +1410,13 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 
 	for(int32_t i = 0 ; i < num_input_paths && ((!use_max_num_all_sentences) || num_all_sentences < max_num_all_sentences) && ((!use_max_num_sentences) || num_sentences < max_num_sentences) && ((!use_max_num_documents) || num_documents < max_num_documents); i++){
 		num_documents++;
+		/* // DO NOT REMOVE
 		if(input_paths_true_positives == NULL){
 			printf("processing %s\n", input_paths[i]);
 		} else {
 			printf("processing %s (true positives: %s)\n", input_paths[i], input_paths_true_positives[i]);
 		}
+		*/
 		size_t input_path_len = strlen(input_paths[i]);
 		struct cupt_sentence_iterator csi;
 		struct cupt_sentence_iterator csi_tp;
@@ -929,7 +1459,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 		} else if(strcmp(&(input_paths[i][input_path_len - 6]), ".jsonl") == 0){
 			current_file_format = JSONL;
 			printf("JSONL: %s\n", input_paths[i]);
-			if(create_jsonl_document_iterator(&jdi, input_paths[i]) != 0){
+			if(create_jsonl_document_iterator(&jdi, input_paths[i], JSONL_CONTENT_KEY) != 0){
 				perror("failed to call create_jsonl_document_iterator\n");
 				return 1;
 			}
@@ -1223,7 +1753,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 				}	
 
 				// sentence level recomputation
-				if((ud_column != UD_MWE || found_at_least_one_mwe) && ((!ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP) || num_sentences % SENTENCE_COUNT_RECOMPUTE_STEP == 0) && g.num_nodes > 1){
+				if((ud_column != UD_MWE || found_at_least_one_mwe) && (ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP && (((!SENTENCE_RECOMPUTE_STEP_USE_LOG10) && num_sentences % SENTENCE_COUNT_RECOMPUTE_STEP == 0) || (SENTENCE_RECOMPUTE_STEP_USE_LOG10 && ((uint64_t) num_sentences) >= stacked_sentence_count_target))) && g.num_nodes > 1){
 					printf("found_at_least_one_mwe: %i; g.num_nodes: %lu\n", found_at_least_one_mwe, g.num_nodes);
 					double absolute_proportion_sum = 0.0;
 					for(uint64_t p = 0 ; p < g.num_nodes ; p++){
@@ -1242,7 +1772,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
+						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
 						if(err != 0){
 							perror("failed to call apply_diversity_functions_to_graph\n");
 							return 1;
@@ -1250,6 +1780,12 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 						previous_best_s = best_s;
 					} else { // end of comparison best_s?
 						printf("ignoring because best_s (%.12f) == previous_best_s (%.12f) && g->num_nodes (%lu) == previous_g_num_nodes (%li)\n", best_s, previous_best_s, g.num_nodes, previous_g_num_nodes);
+					}
+
+					if(SENTENCE_RECOMPUTE_STEP_USE_LOG10){
+						stacked_sentence_count_log10 += SENTENCE_COUNT_RECOMPUTE_STEP_LOG10;
+						stacked_sentence_count_target = (uint64_t) floor(pow(10.0, stacked_sentence_count_log10));
+						printf("New sentence count target: %lu (10.0^%.3f)\n", stacked_sentence_count_target, stacked_sentence_count_log10);
 					}
 				}
 
@@ -1277,7 +1813,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 
 			// document level recomputation
 
-			if((ud_column != UD_MWE || found_at_least_one_mwe) && ((!ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP) || num_documents % DOCUMENT_COUNT_RECOMPUTE_STEP == 0) && g.num_nodes > 1){
+			if((ud_column != UD_MWE || found_at_least_one_mwe) && (ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP && (((!DOCUMENT_RECOMPUTE_STEP_USE_LOG10) && num_documents % DOCUMENT_COUNT_RECOMPUTE_STEP == 0) || (DOCUMENT_RECOMPUTE_STEP_USE_LOG10 && num_documents >= stacked_document_count_target)) && g.num_nodes > 1)){
 				printf("found_at_least_one_mwe: %i; g.num_nodes: %lu\n", found_at_least_one_mwe, g.num_nodes);
 				double absolute_proportion_sum = 0.0;
 				for(uint64_t p = 0 ; p < g.num_nodes ; p++){
@@ -1296,7 +1832,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 			
 				if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 					printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
+					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
 					if(err != 0){
 						perror("failed to call apply_diversity_functions_to_graph\n");
 						return 1;
@@ -1304,6 +1840,12 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 					previous_best_s = best_s;
 				} else { // end of comparison best_s?
 					printf("ignoring because best_s (%.12f) == previous_best_s (%.12f) && g->num_nodes (%lu) == previous_g_num_nodes (%li)\n", best_s, previous_best_s, g.num_nodes, previous_g_num_nodes);
+				}
+
+				if(DOCUMENT_RECOMPUTE_STEP_USE_LOG10){
+					stacked_document_count_log10 += DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10;
+					stacked_document_count_target = (uint64_t) floor(pow(10.0, stacked_document_count_log10));
+					printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
 				}
 			}
 		} else if(current_file_format == JSONL){
@@ -1359,7 +1901,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 						}
 					}
 				}
-				if((ud_column != UD_MWE || found_at_least_one_mwe) && (num_documents % DOCUMENT_COUNT_RECOMPUTE_STEP == 0) && g.num_nodes > 1){
+				if((ud_column != UD_MWE || found_at_least_one_mwe) && (ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP && (((!DOCUMENT_RECOMPUTE_STEP_USE_LOG10) && num_documents % DOCUMENT_COUNT_RECOMPUTE_STEP == 0) || (DOCUMENT_RECOMPUTE_STEP_USE_LOG10 && num_documents >= stacked_document_count_target)) && g.num_nodes > 1)){
 					double absolute_proportion_sum = 0.0;
 					for(uint64_t p = 0 ; p < g.num_nodes ; p++){
 						absolute_proportion_sum += (double) g.nodes[p].absolute_proportion;
@@ -1377,7 +1919,7 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
+						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database);
 						if(err != 0){
 							perror("failed to call apply_diversity_functions_to_graph\n");
 							return 1;
@@ -1385,6 +1927,12 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 						previous_best_s = best_s;
 					} else { // end of comparison best_s?
 						printf("ignoring because best_s (%.12f) == previous_best_s (%.12f) && g->num_nodes (%lu) == previous_g_num_nodes (%li)\n", best_s, previous_best_s, g.num_nodes, previous_g_num_nodes);
+					}
+
+					if(DOCUMENT_RECOMPUTE_STEP_USE_LOG10){
+						stacked_document_count_log10 += DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10;
+						stacked_document_count_target = (uint64_t) floor(pow(10.0, stacked_document_count_log10));
+						printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
 					}
 				}
 
@@ -1406,10 +1954,15 @@ int32_t measurement(struct word2vec* w2v, int32_t ud_column){
 	free_graph_distance_heap(&heap);
 	free_minimum_spanning_tree(&mst);
 
+	free_sorted_array(&sorted_array_discarded_because_not_in_vector_database);
 
 	for(int32_t i = 0 ; i < num_files ; i++){
 		free(bfr[i]);
 	}
+
+	fclose(f_ptr);
+	if(f_timing_ptr != NULL){fclose(f_timing_ptr);}
+	if(f_memory_ptr != NULL){fclose(f_memory_ptr);}
 
 	return 0;
 

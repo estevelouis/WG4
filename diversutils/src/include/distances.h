@@ -28,9 +28,10 @@
 #ifndef DISTANCES_H
 #define DISTANCES_H
 
-#include<math.h>
+#include <math.h>
+#include <stdint.h>
 
-// inline double minkowski_distance(double* restrict a, double* restrict b, int n, double order){
+// double minkowski_distance(double* restrict a, double* restrict b, int n, double order){
 double minkowski_distance(double* restrict a, double* restrict b, int n, double order){
 	double sum_ = 0.0;
 	for(int i = 0 ; i < n ; i++){
@@ -55,7 +56,7 @@ float minkowski_distance_fp32(float* restrict a, float* restrict b, int n, float
 	return (float) pow(sum_, 1.0f / order);
 }
 
-inline float cosine_distance_fp32(const float* restrict const a, const float* restrict const b, const int32_t n){
+float cosine_distance_fp32(const float* restrict const a, const float* restrict const b, const int32_t n){
 	float upper_sum = 0.0;
 	float lower_sum_a = 0.0;
 	float lower_sum_b = 0.0;
@@ -68,11 +69,100 @@ inline float cosine_distance_fp32(const float* restrict const a, const float* re
 	return (1.0f - cosine_similarity);
 }
 
-inline float cosine_distance_norm_fp32(float* restrict a, float* restrict b, int32_t n){
+float cosine_distance_norm_fp32(float* restrict a, float* restrict b, int32_t n){
 	return cosine_distance_fp32(a, b, n) / 2.0f;
 }
 
-inline double cosine_distance(const double* restrict const a, const double* restrict const b, const int n){
+float cosine_distance_fp32_avx(const float* restrict const a, const float* restrict const b, const int32_t n){
+	float upper_sum = 0.0;
+	float lower_sum_a = 0.0;
+	float lower_sum_b = 0.0;
+
+	__m256 avx256_upper_sum = _mm256_setzero_ps();
+	__m256 avx256_lower_sum_a = _mm256_setzero_ps();
+	__m256 avx256_lower_sum_b = _mm256_setzero_ps();
+
+	float vec_upper_sum[8];
+	float vec_lower_sum_a[8];
+	float vec_lower_sum_b[8];
+
+	/*
+	int32_t i = 0;
+	while(i < n){
+		
+	}
+	*/
+	// const int32_t i_limit = n >> 3;
+	// const int32_t i_limit = (int32_t) floor(n / 8);
+	
+	int32_t i = 0;
+	while(i < n){
+		// printf("i: %i / %i\n", i, n);
+		// __m256 avx256_a = _mm256_load_ps(&(a[i]));
+		// __m256 avx256_b = _mm256_load_ps(&(b[i]));
+		__m256 avx256_a = _mm256_loadu_ps(&(a[i])); // had to load unaligned
+		__m256 avx256_b = _mm256_loadu_ps(&(b[i]));
+		// memcpy(&avx256_a, &(a[i]), 32);
+		// memcpy(&avx256_b, &(b[i]), 32);
+
+		/**/
+		__m256 avx256_local_upper_sum = _mm256_mul_ps(avx256_a, avx256_b);
+		avx256_upper_sum = _mm256_add_ps(avx256_upper_sum, avx256_local_upper_sum);
+		// __m256 new_avx256_upper_sum = _mm256_add_ps(avx256_upper_sum, avx256_local_upper_sum);
+		// avx256_upper_sum = new_avx256_upper_sum;
+		/**/
+
+
+		// _mm256_fmmul_ps(avx256_a, avx256_b);
+
+		// printf("1 ");
+
+		// ----
+
+		__m256 avx256_local_lower_sum_a = _mm256_mul_ps(avx256_a, avx256_a);
+		avx256_lower_sum_a = _mm256_add_ps(avx256_lower_sum_a, avx256_local_lower_sum_a);
+		// __m256 new_avx256_lower_sum_a = _mm256_add_ps(avx256_lower_sum_a, avx256_local_lower_sum_a);
+		// avx256_lower_sum_a = new_avx256_lower_sum_a;
+
+		// printf("2 ");
+
+		__m256 avx256_local_lower_sum_b = _mm256_mul_ps(avx256_b, avx256_b);
+		avx256_lower_sum_b = _mm256_add_ps(avx256_lower_sum_b, avx256_local_lower_sum_b);
+		// __m256 new_bvx256_lower_sum_b = _mm256_add_ps(avx256_lower_sum_b, avx256_local_lower_sum_b);
+		// avx256_lower_sum_b = new_bvx256_lower_sum_b;
+
+		// printf("3\n");
+
+		i += 8;
+	}
+
+	/*
+	_mm256_store_ps(vec_upper_sum, avx256_upper_sum);
+	_mm256_store_ps(vec_lower_sum_a, avx256_lower_sum_a);
+	_mm256_store_ps(vec_lower_sum_b, avx256_lower_sum_b);
+	*/
+
+	_mm256_storeu_ps(vec_upper_sum, avx256_upper_sum);
+	_mm256_storeu_ps(vec_lower_sum_a, avx256_lower_sum_a);
+	_mm256_storeu_ps(vec_lower_sum_b, avx256_lower_sum_b);
+
+	for(int32_t j = 0 ; j < 8 ; j++){
+		upper_sum += vec_upper_sum[j];
+		lower_sum_a += vec_lower_sum_a[j];
+		lower_sum_b += vec_lower_sum_b[j];
+	}
+	while(i < n){
+		upper_sum += a[i] * b[i];
+		lower_sum_a += powf(a[i], 2.0f);
+		lower_sum_b += powf(b[i], 2.0f);
+		i++;
+	}
+	// printf("upper_sum: %f; lower_sum_a: %f; lower_sum_b: %f\n", upper_sum, lower_sum_a, lower_sum_b);
+	float cosine_similarity = (upper_sum / (sqrtf(lower_sum_a) * sqrtf(lower_sum_b)));
+	return (1.0f - cosine_similarity);
+}
+
+double cosine_distance(const double* restrict const a, const double* restrict const b, const int n){
 	double upper_sum = 0.0;
 	double lower_sum_a = 0.0;
 	double lower_sum_b = 0.0;
@@ -85,11 +175,11 @@ inline double cosine_distance(const double* restrict const a, const double* rest
 	return (1.0 - cosine_similarity);
 }
 
-inline double cosine_distance_norm(double* restrict a, double* restrict b, int32_t n){
+double cosine_distance_norm(double* restrict a, double* restrict b, int32_t n){
 	return cosine_distance(a, b, n) / 2.0;
 }
 
-inline double chebyshev_distance(double* restrict a, double* restrict b, int n){
+double chebyshev_distance(double* restrict a, double* restrict b, int n){
 	double result = 0.0;
 	for(int i = 0 ; i < n ; i++){
 		double diff = a[i] - b[i];
@@ -103,7 +193,7 @@ inline double chebyshev_distance(double* restrict a, double* restrict b, int n){
 	return result;
 }
 
-inline double canberra_distance(double* restrict a, double* restrict b, int n){
+double canberra_distance(double* restrict a, double* restrict b, int n){
 	double result = 0.0;
 	for(int i = 0 ; i < n ; i++){
 		double diff = a[i] - b[i];
@@ -125,7 +215,7 @@ inline double canberra_distance(double* restrict a, double* restrict b, int n){
 	return result;
 }
 
-inline double bray_curtis_distance(double* restrict a, double* restrict b, int n){
+double bray_curtis_distance(double* restrict a, double* restrict b, int n){
 	double upper_sum = 0.0;
 	double lower_sum = 0.0;
 	for(int i = 0 ; i < n ; i++){
@@ -141,7 +231,7 @@ inline double bray_curtis_distance(double* restrict a, double* restrict b, int n
 }
 
 /*
-inline double rootless_angular_minkowski_distance(double* restrict a, double* restrict b, int n, double order){
+double rootless_angular_minkowski_distance(double* restrict a, double* restrict b, int n, double order){
 	// Lenz and Cornelis (2023)
 	double a_p_norm = 0.0;
 	double b_p_norm = 0.0;
@@ -178,13 +268,13 @@ inline double rootless_angular_minkowski_distance(double* restrict a, double* re
 	
 }
 
-inline double angular_minkowski_distance(double* restrict a, double* restrict b, int n, double order){
+double angular_minkowski_distance(double* restrict a, double* restrict b, int n, double order){
 	// Lenz and Cornelis (2023)
 	return pow(rootless_angular_minkowski_distance(a, b, n, order), 1.0 / order);
 }
 */
 
-inline double angular_minkowski_distance(double* restrict a, double* restrict b, int32_t n, double order){
+double angular_minkowski_distance(double* restrict a, double* restrict b, int32_t n, double order){
 	// Lenz and Cornelis (2023)
 	double a_p_norm = 0.0;
 	double b_p_norm = 0.0;
@@ -227,11 +317,11 @@ inline double angular_minkowski_distance(double* restrict a, double* restrict b,
 	return result;
 }
 
-inline double rootless_angular_minkowski_distance(double* restrict a, double* restrict b, int32_t n, double order){
+double rootless_angular_minkowski_distance(double* restrict a, double* restrict b, int32_t n, double order){
 	return pow(angular_minkowski_distance(a, b, n, order), order);
 }
 
-inline float angular_minkowski_distance_fp32(float* restrict a, float* restrict b, int32_t n, float order){
+float angular_minkowski_distance_fp32(float* restrict a, float* restrict b, int32_t n, float order){
 	// Lenz and Cornelis (2023)
 	float a_p_norm = 0.0f;
 	float b_p_norm = 0.0f;
@@ -274,7 +364,7 @@ inline float angular_minkowski_distance_fp32(float* restrict a, float* restrict 
 	return result;
 }
 
-inline float rootless_angular_minkowski_distance_fp32(float* restrict a, float* restrict b, int32_t n, float order){
+float rootless_angular_minkowski_distance_fp32(float* restrict a, float* restrict b, int32_t n, float order){
 	return powf(angular_minkowski_distance_fp32(a, b, n, order), order);
 }
 

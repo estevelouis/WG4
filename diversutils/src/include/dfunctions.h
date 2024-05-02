@@ -47,6 +47,7 @@ double q_logarithm(double x, double q){
 void shannon_weaver_entropy_from_graph(const struct graph* const g, double* res_entropy, double* res_hill_number){
 	double loc_res = 0.0;
 	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
+		if(g->nodes[i].relative_proportion <= 0.0){continue;}
 		loc_res += g->nodes[i].relative_proportion * (log(g->nodes[i].relative_proportion) / log(LOGARITHMIC_BASE));
 	}
 	loc_res *= -1.0;

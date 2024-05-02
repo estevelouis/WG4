@@ -1,5 +1,6 @@
 build
 diversutils/build
+diversutils/bin
 utils/output*
 *.egg-info
 */*.egg-info

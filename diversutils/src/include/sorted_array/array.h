@@ -80,7 +80,7 @@ int32_t create_sorted_array_int_str_element(struct sorted_array_int_str_element*
 
 struct sorted_array {
 	void* bfr;
-	void* bfr_cpy;
+	// void* bfr_cpy;
 	size_t element_size;
 	int64_t num_elements;
 	int64_t capacity;
@@ -106,7 +106,7 @@ int32_t create_sorted_array(struct sorted_array* array, int64_t num_elements, si
 	}
 	memset(malloc_pointer, '\0', malloc_size);
 	array->bfr = malloc_pointer;
-	array->bfr_cpy = array->bfr;
+	// array->bfr_cpy = array->bfr;
 	array->to_free = 1;
 	array->element_size = element_size;
 	array->comp = comp;
@@ -128,11 +128,13 @@ int32_t recreate_sorted_array(struct sorted_array* array, int64_t num_elements, 
 		array->capacity = SORTED_ARRAY_STEP;
 		array->num_elements = 0;
 	}
+	/*
 	assert(array->bfr == array->bfr_cpy);
 	if(array->bfr != array->bfr_cpy){
 		perror("!\n");
 		exit(1);
 	}
+	*/
 	if(malloc_size == 0){
 		printf("new_size == 0\n");
 		exit(1);
@@ -143,7 +145,7 @@ int32_t recreate_sorted_array(struct sorted_array* array, int64_t num_elements, 
 		/* perror("failed to malloc\n"); */
 		return 1;
 	}
-	array->bfr_cpy = array->bfr;
+	// array->bfr_cpy = array->bfr;
 	memset(array->bfr, '\0', malloc_size);
 	array->to_free = 1;
 	array->capacity = num_elements;
@@ -158,11 +160,13 @@ int32_t recreate_sorted_array(struct sorted_array* array, int64_t num_elements, 
 }
 
 void free_sorted_array(struct sorted_array* array){
+	/*
 	assert(array->bfr == array->bfr_cpy);
 	if(array->bfr != array->bfr_cpy){
 		perror("!\n");
 		exit(1);
 	}
+	*/
 	if(array->to_free == 1){
 		free(array->bfr);
 		array->to_free = 0;
