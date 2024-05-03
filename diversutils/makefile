@@ -12,13 +12,13 @@
 
 CC = gcc
 #CC = clang
-CFLAGS_PEDANTIC = -std=c99 -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic
-CFLAGS_STANDARD = -std=c99 -Wall -Wextra -Wformat -Wformat-security
-CFLAGS_DEBUG = -std=c99 -Wall -Wextra -Wformat -Wformat-security -g3
+CFLAGS_PEDANTIC = -std=c99 -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic -march=native
+CFLAGS_STANDARD = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
+CFLAGS_DEBUG = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native -g3
 CFLAGS_OPTIM = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
 CFLAGS_TEST = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_COVERAGE = -std=c99 -Wall -Wextra -Wformat -Wformat-security --coverage
-CFLAGS_PROFILING = -std=c99 -Wall -Wextra -Wformat -Wformat-security -pg -g
+CFLAGS_COVERAGE = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native --coverage
+CFLAGS_PROFILING = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native -pg -g
 CPPFLAGS = -Isrc/include
 CPPFLAGS_TEST = -Isrc/include -Itest/include 
 OPT_LEVEL = -O2
