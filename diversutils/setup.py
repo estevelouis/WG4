@@ -10,7 +10,7 @@ setup(
         Extension(
             "diversutils",
             sources=["src/diversutilsmodule.c"],
-            extra_compile_args=["-Wall", "-Wextra", "-pedantic", "-Isrc/include", "-std=c99", "-lm"]
+            extra_compile_args=["-Wall", "-Wextra", "-pedantic", "-Isrc/include", "-march=native", "-std=c99", "-lm", "-lrt", "-pthread"]
         )
     ]
 )
