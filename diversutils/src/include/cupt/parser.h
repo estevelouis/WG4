@@ -436,7 +436,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
 			continue;
 		}
-		if(strncmp(csi->bfr_read, "# text =", strlen("# text =")) == 0 || strncmp(csi->bfr_read, "# text=", strlen("# text=")) == 0){
+		if(strncmp(csi->bfr_read, "# text =", strlen("# text =")) == 0 || strncmp(csi->bfr_read, "# text=", strlen("# text=")) == 0 || strncmp(csi->bfr_read, "# text_en =", strlen("# text_en =")) == 0 || strncmp(csi->bfr_read, "# text_en=", strlen("# text_en=")) == 0){
 			if(strchr(csi->bfr_read, '\n') != NULL || strchr(csi->bfr_read, '\r') != NULL){
 				currently_in_text_line = 0;
 			} else {
@@ -499,7 +499,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 							return 1;
 						}
 					} else {
-						perror("Failed to parse a token\n");
+						fprintf(stderr, "Failed to parse a token; csi->bfr_read: %s\n", csi->bfr_read);
 					}					
 
 					memset(id_raw, '\0', TOKEN_ID_RAW_SIZE);
