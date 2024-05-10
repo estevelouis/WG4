@@ -445,6 +445,16 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
 			continue;
 		}
+		if(previous_line_finished && csi->bfr_read[0] == '#'){ // filtering out non-standard metadata lines
+			while(1){
+				size_t local_len = strlen(csi->bfr_read);
+				if(csi->bfr_read[local_len - 1] == '\n'){break;}
+				memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);
+				if(feof(csi->file_ptr) || fgets(csi->bfr_read, FILE_READ_BUFFER_SIZE, csi->file_ptr) == 0){break;}
+			}
+			// previous_line_finished = 1; // useless?
+			continue;
+		}
 
 		previous_line_finished = 0;
 		int32_t i = 0;
