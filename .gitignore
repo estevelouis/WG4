@@ -1,3 +1,9 @@
+*.log
+*.jsonl
+*.txt
+*.bin
+*.tsv
+
 build
 diversutils/build
 diversutils/bin
