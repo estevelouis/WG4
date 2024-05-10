@@ -2244,6 +2244,8 @@ int32_t main(int32_t argc, char** argv){
 	double argv_hill_evenness_alpha = HILL_EVENNESS_ALPHA;
 	double argv_hill_evenness_beta = HILL_EVENNESS_BETA;
 
+	uint8_t argv_force_timing_and_memory_to_output_path = 0;
+
 	for(int32_t i = 1 ; i < argc ; i++){
 		if(strncmp(argv[i], "--w2v_path=", 11) == 0){argv_w2v_path = argv[i] + 11;}
 		else if(strncmp(argv[i], "--target_column=", 16) == 0){
@@ -2323,6 +2325,7 @@ int32_t main(int32_t argc, char** argv){
 		else if(strncmp(argv[i], "--sentence_count_recompute_step_log10=", 38) == 0){argv_sentence_count_recompute_step_log10 = strtod(argv[i] + 38, NULL);}
 		else if(strncmp(argv[i], "--document_count_recompute_step=", 32) == 0){argv_document_count_recompute_step = strtol(argv[i] + 32, NULL, 10);}
 		else if(strncmp(argv[i], "--document_count_recompute_step_log10=", 38) == 0){argv_document_count_recompute_step_log10 = strtod(argv[i] + 38, NULL);}
+		else if(strncmp(argv[i], "--force_timing_and_memory_to_output_path=", 41) == 0){argv_force_timing_and_memory_to_output_path = (argv[i][41] == '1');}
 		else {fprintf(stderr, "Unknown argument: %s\n", argv[i]); return 1;}
 	}
 
@@ -2333,10 +2336,39 @@ int32_t main(int32_t argc, char** argv){
 	if(argv_output_path_timing == NULL){argv_output_path_timing = OUTPUT_PATH_TIMING;}
 	if(argv_output_path_memory == NULL){argv_output_path_memory = OUTPUT_PATH_MEMORY;}
 
+	if(argv_force_timing_and_memory_to_output_path){
+		size_t path_len, delta, alloc_size, len_suffix;
+		char* ptr_last_slash;
+
+		ptr_last_slash = strrchr(argv_output_path, '/');
+		if(ptr_last_slash == NULL){ptr_last_slash = argv_output_path - 1;}
+		// ptr_last_slash++;
+
+		delta = ((size_t) (ptr_last_slash - argv_output_path)) + 1;
+		len_suffix = strlen("measurement_output_timing.tsv");
+		path_len = delta + len_suffix;
+		alloc_size = path_len + 1;
+		argv_output_path_timing = malloc(alloc_size);
+		if(argv_output_path_timing == NULL){goto malloc_fail;}
+		memset(argv_output_path_timing, '\0', alloc_size);
+		memcpy(argv_output_path_timing, argv_output_path, delta);
+		memcpy(argv_output_path_timing + delta, "measurement_output_timing.tsv", len_suffix);
+		
+		len_suffix = strlen("measurement_output_memory.tsv");
+		path_len = delta + len_suffix;
+		alloc_size = path_len + 1;
+		argv_output_path_memory = malloc(alloc_size);
+		if(argv_output_path_memory == NULL){free(argv_output_path_timing); goto malloc_fail;}
+		memset(argv_output_path_memory, '\0', alloc_size);
+		memcpy(argv_output_path_memory, argv_output_path, delta);
+		memcpy(argv_output_path_memory + delta, "measurement_output_memory.tsv", len_suffix);
+	}
+
 	printf("w2v_path: %s\n", argv_w2v_path);
 	printf("jsonl_content_key: %s\n", argv_jsonl_content_key);
 	printf("input_path: %s\n", argv_input_path);
 	printf("output_path: %s\n", argv_output_path);
+	printf("force_timing_and_memory_to_output_path: %u\n", argv_force_timing_and_memory_to_output_path);
 	printf("output_path_timing: %s\n", argv_output_path_timing);
 	printf("output_path_memory: %s\n", argv_output_path_memory);
 
@@ -2418,11 +2450,14 @@ int32_t main(int32_t argc, char** argv){
 	struct word2vec w2v;
 	err = load_word2vec_binary(&w2v, argv_w2v_path);
 	if(err != 0){
-		perror("failed to call load_word2vec binary\n");
+		fprintf(stderr, "failed to call load_word2vec binary: %s\n", argv_w2v_path);
+		if(argv_force_timing_and_memory_to_output_path){
+			free(argv_output_path_timing);
+			free(argv_output_path_memory);
+		}
 		return 1;
 	}
 
-	// err = measurement(&w2v, argv_target_column);
 	err = measurement(
 		&w2v,
 		argv_jsonl_content_key,
@@ -2502,9 +2537,23 @@ int32_t main(int32_t argc, char** argv){
 	);
 	if(err != 0){
 		perror("failed to call measurement\n");
+		if(argv_force_timing_and_memory_to_output_path){
+			free(argv_output_path_timing);
+			free(argv_output_path_memory);
+		}
 		return 1;
 	}
 
+	free_word2vec(&w2v);
+
+	if(argv_force_timing_and_memory_to_output_path){
+		free(argv_output_path_timing);
+		free(argv_output_path_memory);
+	}
 	return 0;
+
+	malloc_fail:
+	perror("malloc failed\n");
+	return 1;
 }
 
