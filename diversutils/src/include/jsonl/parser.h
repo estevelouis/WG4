@@ -28,16 +28,40 @@
 #ifndef JSONL_PARSER_H
 #define JSONL_PARSER_H
 
+/**/
+enum {
+	TOKENIZATION_METHOD_REGEX  = 0,
+	TOKENIZATION_METHOD_UDPIPE = 1
+};
+/**/
+
+#ifndef TOKENIZATION_METHOD
+// #define TOKENIZATION_METHOD REGEX
+// #define TOKENIZATION_METHOD TOKENIZATION_METHOD_REGEX
+#define TOKENIZATION_METHOD 0 // regex
+#endif
+
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
 #include<errno.h>
+#include<sys/types.h> // ?
+#include<sys/stat.h>
+#include<unistd.h> // ?
+// #if TOKENIZATION_METHOD == REGEX
+// #if TOKENIZATION_METHOD == TOKENIZATION_METHOD_REGEX
+#if TOKENIZATION_METHOD == 0
 #include<regex.h>
+#endif
 
 #include "jsonl/constants.h"
-
 #include "sorted_array/array.h"
+#include "sanitize.h"
 
+// #if TOKENIZATION_METHOD == REGEX
+// #if TOKENIZATION_METHOD == "REGEX"
+// #if TOKENIZATION_METHOD == TOKENIZATION_METHOD_REGEX
+#if TOKENIZATION_METHOD == 0
 // const char* const REGEX_STD_PATTERN = "[a-zéèêàç\\-]+'?|[\\.\\-,;:!\\?]";
 // const char* const REGEX_STD_PATTERN = "([a-zéèêàç\\-]+'?)|[\\.\\-,;:!\\?]";
 // const char* const REGEX_STD_PATTERN = "([a-zéèêàç\\-]+'?)|[,;:!\\?]"; // works
@@ -50,14 +74,52 @@ const char* const REGEX_STD_PATTERN = "[^ \t\r\n,;:!\\?\\./']+'?";
 const size_t NMATCH = 1;
 // const size_t NMATCH = 2;
 const int32_t REGEX_FLAGS = REG_EXTENDED | REG_ICASE;
+#elif TOKENIZATION_METHOD == 1
+const char* udpipe_repo_directory = "./udpipe";
+const char* udpipe_model_directory = "./udpipe/sandbox_models";
+#else
+	#error "Unknown TOKENIZATION_METHOD"
+#endif
+
+void jsonl_init_tokenization(){
+	#if TOKENIZATION_METHOD == 1
+	const int32_t bfr_size = 256;
+	char bfr[bfr_size];
+	memset(bfr, '\0', bfr_size);
+	printf("UDPipe initialization ...\n");
+	printf("Checking repository ...\n");
+	snprintf(bfr, bfr_size, "if [ -d \"%s\" ]; then\ncurrentdirectory=$(pwd)\ncd %s\ngit pull\ncd src\nmake\ncd $currentdirectory\nelse\ngit clone https://github.com/ufal/udpipe %s\ncurrentdirectory=$(pwd)\ncd udpipe/src\nmake\ncd $currentdirectory\nfi\n", udpipe_repo_directory, udpipe_repo_directory, udpipe_repo_directory);
+	// printf("trying to run: %s\n", bfr);
+	if(system(bfr) != 0){goto system_failure;}
+	printf("Creating model directory ...\n");
+
+	struct stat local_st = (struct stat) {};
+	if(stat(udpipe_model_directory, &local_st) == -1){
+		if(mkdir(udpipe_model_directory, 0664) != 0){
+			fprintf(stderr, "failed to create %s\n", udpipe_model_directory);
+			exit(1);
+		}
+	}
+
+	return;
+
+	system_failure:
+		fprintf(stderr, "Failed to launch process: %s\n", bfr);
+		exit(1);
+	#endif
+}
 
 struct document {
 	int32_t identifier_size;
 	int32_t text_size;
 	int32_t identifier_capacity;
 	int32_t text_capacity;
+	#if TOKENIZATION_METHOD == 0
 	regex_t reg;
 	regoff_t latest_rm_eo;
+	#elif TOKENIZATION_METHOD == 1
+	FILE* tmp_udpipe_output_file;
+	#endif
 	int8_t reached_last_token;
 	int8_t usable;
 	char current_token[JSONL_CURRENT_TOKEN_BUFFER_SIZE];
@@ -65,7 +127,55 @@ struct document {
 	char* text;
 };
 
+int32_t launch_udpipe(struct document* const doc){
+	#if TOKENIZATION_METHOD == 1
+	const char* model_name = "english-ewt-ud-2.5-191206.udpipe";
+	// const char* model_name = "french-sequoia-ud-2.5-191206.udpipe";
+
+	const int32_t path_model_bfr_size = 1024;
+	char path_model_bfr[path_model_bfr_size];
+	memset(path_model_bfr, '\0', path_model_bfr_size);
+	snprintf(path_model_bfr, path_model_bfr_size, "%s/%s", udpipe_model_directory, model_name);
+
+	for(int32_t i = 0 ; i < doc->text_size ; i++){
+		if(doc->text[i] == '"'){doc->text[i] = ' ';}
+	}
+
+	char* sanitized_text;
+	if(sanitize_for_shell(doc->text, doc->text_size, &sanitized_text) != 0){
+		perror("failed to sanitize text\n");
+		return 1;
+	}
+	const int32_t udpipe_call_bfr_size = 1024 + strlen(sanitized_text);
+	size_t alloc_size = udpipe_call_bfr_size * sizeof(char);
+	char* udpipe_call_bfr = malloc(alloc_size);
+	if(udpipe_call_bfr == NULL){perror("malloc failed\n"); return 1;}
+	memset(udpipe_call_bfr, '\0', udpipe_call_bfr_size);
+	// snprintf(udpipe_call_bfr, udpipe_call_bfr_size, "echo \"%s\" | %s/src/udpipe --tokenize %s --output=vertical --input=horizontal\n", sanitized_text, udpipe_repo_directory, path_model_bfr); // works
+	snprintf(udpipe_call_bfr, udpipe_call_bfr_size, "echo \"%s\" | %s/src/udpipe --tokenize %s --output=vertical --input=horizontal --immediate\n", sanitized_text, udpipe_repo_directory, path_model_bfr); // works
+	doc->tmp_udpipe_output_file = popen(udpipe_call_bfr, "r");
+	if(doc->tmp_udpipe_output_file == NULL){
+		fprintf(stderr, "Failed to call UDPipe: %s\n", udpipe_call_bfr);
+		free(udpipe_call_bfr);
+		return 1;
+	}
+	free(sanitized_text); // malloc by sanitize_for_shell
+	free(udpipe_call_bfr);
+	#endif
+	return 0;
+}
+
 int32_t create_document(struct document* doc){
+	#if TOKENIZATION_METHOD == 1
+	static uint32_t document_counter = 0;
+	if(document_counter < UINT32_MAX){
+		document_counter++;
+	} else {
+		perror("document_counter reached UINT32_MAX\n");
+		return 1;
+	}
+	#endif
+
 	size_t malloc_size = JSONL_DOCUMENT_IDENTIFIER_DEFAULT_CAPACITY * sizeof(char);
 	doc->identifier = (char*) malloc(malloc_size);
 	if(doc->identifier == NULL){goto malloc_fail;}
@@ -80,11 +190,13 @@ int32_t create_document(struct document* doc){
 	doc->text_capacity = JSONL_DOCUMENT_TEXT_DEFAULT_CAPACITY;
 	doc->text_size = 0;
 
+	#if TOKENIZATION_METHOD == 0
 	if(regcomp(&(doc->reg), REGEX_STD_PATTERN, REGEX_FLAGS) != 0){
 		perror("failed to call regcomp\n");
 		return 1;
 	}
 	doc->latest_rm_eo = 0;
+	#endif
 	doc->reached_last_token = 0;
 	doc->usable = 1;
 
@@ -101,6 +213,7 @@ int32_t create_document(struct document* doc){
 }
 
 int32_t iterate_document_current_token(struct document* const doc){
+	#if TOKENIZATION_METHOD == 0
 	regmatch_t pmatch[NMATCH];
 	int32_t err = regexec(&(doc->reg), doc->text + doc->latest_rm_eo, NMATCH, pmatch, 0);
 	if(err == REG_NOMATCH){
@@ -119,13 +232,43 @@ int32_t iterate_document_current_token(struct document* const doc){
 	doc->current_token[len] = '\0';
 	doc->latest_rm_eo = objective_eo;
 	return 0;
+	#elif TOKENIZATION_METHOD == 1
+	if(doc->tmp_udpipe_output_file != NULL && feof(doc->tmp_udpipe_output_file)){
+		doc->reached_last_token = 1;
+		doc->usable = 0;
+		pclose(doc->tmp_udpipe_output_file);
+		doc->tmp_udpipe_output_file = NULL;
+		return 0;
+	}
+	if(doc->tmp_udpipe_output_file == NULL){
+		launch_udpipe(doc);
+		doc->reached_last_token = 0;
+		doc->usable = 0;
+	}
+
+	while(fgets(doc->current_token, JSONL_CURRENT_TOKEN_BUFFER_SIZE, doc->tmp_udpipe_output_file) && doc->current_token[0] == '\n'){}
+	for(int32_t i = 0 ; i < JSONL_CURRENT_TOKEN_BUFFER_SIZE ; i++){
+		if(doc->current_token[i] == '\n'){
+			doc->current_token[i] = '\0';
+			break;
+		} else if(doc->current_token[i] == '\0'){
+			break;
+		}
+	}
+	// printf("newly found token: %s\n", doc->current_token);
+	return 0;
+	#endif
 }
 
 
 void free_document(struct document* doc){
 	free(doc->identifier);
 	free(doc->text);
+	#if TOKENIZATION_METHOD == 0
 	regfree(&(doc->reg));
+	#elif TOKENIZATION_METHOD == 1
+	pclose(doc->tmp_udpipe_output_file);
+	#endif
 }
 
 struct jsonl_document_iterator {
@@ -193,7 +336,9 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 
 	int8_t in_brackets = 0;
 
+	#if TOKENIZATION_METHOD == 0
 	jdi->current_document.latest_rm_eo = 0;
+	#endif
 	jdi->current_document.reached_last_token = 0;
 	jdi->current_document.usable = 1;
 
@@ -421,6 +566,11 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 
 	if(feof(jdi->file_ptr)){
 		jdi->file_is_done = 1;
+	}
+
+	if(launch_udpipe(&(jdi->current_document)) != 0){
+		perror("Failed to call launch_udpipe\n");
+		return 1;
 	}
 
 	return 0;

@@ -2445,6 +2445,8 @@ int32_t main(int32_t argc, char** argv){
 	printf("hill_evenness_alpha: %f\n", argv_hill_evenness_alpha);
 	printf("hill_evenness_beta: %f\n", argv_hill_evenness_beta);
 
+	jsonl_init_tokenization();
+
 	int32_t err;
 
 	struct word2vec w2v;
