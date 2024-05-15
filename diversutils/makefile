@@ -3,7 +3,7 @@
 # ------------------------------
 #
 # To compile, run:
-# 	make measurement_standard
+# 	make measurement_full
 #
 
 # -----------------
@@ -12,19 +12,24 @@
 
 CC = gcc
 #CC = clang
-CFLAGS_PEDANTIC = -std=c99 -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic -march=native
-CFLAGS_STANDARD = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_DEBUG = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native -g3
-CFLAGS_OPTIM = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_TEST = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_COVERAGE = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native --coverage
-CFLAGS_PROFILING = -std=c99 -Wall -Wextra -Wformat -Wformat-security -march=native -pg -g
-CPPFLAGS = -Isrc/include
-CPPFLAGS_TEST = -Isrc/include -Itest/include 
+CCPP = g++
+#CCPP = clang++
+C_VERSION = -std=c99
+CPP_VERSION = -std=c++11
+CFLAGS_PEDANTIC = -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic -march=native
+CFLAGS_STANDARD = -Wall -Wextra -Wformat -Wformat-security -march=native
+CFLAGS_DEBUG = -Wall -Wextra -Wformat -Wformat-security -march=native -g3
+CFLAGS_OPTIM = -Wall -Wextra -Wformat -Wformat-security -march=native -ffast-math
+CFLAGS_TEST = -Wall -Wextra -Wformat -Wformat-security -march=native
+CFLAGS_COVERAGE = -Wall -Wextra -Wformat -Wformat-security -march=native --coverage
+CFLAGS_PROFILING = -Wall -Wextra -Wformat -Wformat-security -march=native -pg -g
+CPPFLAGS = -Isrc/include -Iudpipe/src_lib_only
+CPPFLAGS_TEST = $(CPPFLAGS) -Itest/include 
 OPT_LEVEL = -O2
 OPT_LEVEL_DEBUG = -O0
 OPT_LEVEL_OPTIM = -O3
 OPT_LEVEL_TEST = -O3
+OPT_LEVEL_LINK = -O3
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
 LINKER_FLAGS = -lm -lrt -pthread
 
@@ -36,7 +41,7 @@ NUM_ROW_THREADS = 2
 NUM_MATRIX_THREADS = 2
 ROW_GENERATION_BATCH_SIZE = 2
 
-ENABLE_AVX256 = 0
+ENABLE_AVX256 = 1
 
 ENABLE_DISPARITY_FUNCTIONS = 0
 
@@ -106,6 +111,7 @@ TARGET_COLUMN = UD_LEMMA
 # JSONL only
 TOKENIZATION_METHOD = 0 # REGEX
 #TOKENIZATION_METHOD = 1 # UDPipe
+#TOKENIZATION_METHOD = 2 # UDPipe embedded
 
 CPP_MACROS = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THREADS=$(NUM_MATRIX_THREADS) -DROW_GENERATION_BATCH_SIZE=$(ROW_GENERATION_BATCH_SIZE) -DENABLE_AVX256=$(ENABLE_AVX256) -DENABLE_DISPARITY_FUNCTIONS=$(ENABLE_DISPARITY_FUNCTIONS) -DENABLE_STIRLING=$(ENABLE_STIRLING) -DENABLE_RICOTTA_SZEIDL=$(ENABLE_RICOTTA_SZEIDL) -DENABLE_PAIRWISE=$(ENABLE_PAIRWISE) -DENABLE_LEXICOGRAPHIC=$(ENABLE_LEXICOGRAPHIC) -DENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY=$(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY) -DENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY=$(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY) -DENABLE_LEINSTER_COBBOLD_DIVERSITY=$(ENABLE_LEINSTER_COBBOLD_DIVERSITY) -DENABLE_FUNCTIONAL_EVENNESS=$(ENABLE_FUNCTIONAL_EVENNESS) -DENABLE_FUNCTIONAL_DISPERSION=$(ENABLE_FUNCTIONAL_DISPERSION) -DENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED=$(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED) -DENABLE_NON_DISPARITY_FUNCTIONS=$(ENABLE_NON_DISPARITY_FUNCTIONS) -DENABLE_SHANNON_WEAVER_ENTROPY=$(ENABLE_SHANNON_WEAVER_ENTROPY) -DENABLE_GOOD_ENTROPY=$(ENABLE_GOOD_ENTROPY) -DENABLE_RENYI_ENTROPY=$(ENABLE_RENYI_ENTROPY) -DENABLE_PATIL_TAILLIE_ENTROPY=$(ENABLE_PATIL_TAILLIE_ENTROPY) -DENABLE_SIMPSON_INDEX=$(ENABLE_SIMPSON_INDEX) -DENABLE_SIMPSON_DOMINANCE_INDEX=$(ENABLE_SIMPSON_DOMINANCE_INDEX) -DENABLE_HILL_NUMBER_STANDARD=$(ENABLE_HILL_NUMBER_STANDARD) -DENABLE_HILL_EVENNESS=$(ENABLE_HILL_EVENNESS) -DENABLE_BERGER_PARKER_INDEX=$(ENABLE_BERGER_PARKER_INDEX) -DENABLE_JUNGE1994_PAGE20=$(ENABLE_JUNGE1994_PAGE20) -DENABLE_JUNGE1994_PAGE22=$(ENABLE_JUNGE1994_PAGE22) -DENABLE_BRILLOUIN_DIVERSITY=$(ENABLE_BRILLOUIN_DIVERSITY) -DENABLE_MCINTOSH_INDEX=$(ENABLE_MCINTOSH_INDEX) -DENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975=$(ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975) -DENABLE_SW_E_HEIP=$(ENABLE_SW_E_HEIP) -DENABLE_SW_E_ONE_MINUS_D=$(ENABLE_SW_E_ONE_MINUS_D) -DENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964=$(ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964) -DENABLE_SW_E_MINUS_LN_D_PIELOU1977=$(ENABLE_SW_E_MINUS_LN_D_PIELOU1977) -DENABLE_SW_F_2_1_ALATALO1981=$(ENABLE_SW_F_2_1_ALATALO1981) -DENABLE_SW_G_2_1_MOLINARI1989=$(ENABLE_SW_G_2_1_MOLINARI1989) -DENABLE_SW_E_BULLA1994=$(ENABLE_SW_E_BULLA1994) -DENABLE_SW_O_BULLA1994=$(ENABLE_SW_O_BULLA1994) -DENABLE_SW_E_MCI_PIELOU1969=$(ENABLE_SW_E_MCI_PIELOU1969) -DENABLE_SW_E_PRIME_CAMARGO1993=$(ENABLE_SW_E_PRIME_CAMARGO1993) -DENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL=$(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL) -DENABLE_TIMINGS=$(ENABLE_TIMINGS) -DENABLE_ITERATIVE_DISTANCE_COMPUTATION=$(ENABLE_ITERATIVE_DISTANCE_COMPUTATION) -DENABLE_MULTITHREADED_ROW_GENERATION=$(ENABLE_MULTITHREADED_ROW_GENERATION) -DENABLE_MULTITHREADED_MATRIX_GENERATION=$(ENABLE_MULTITHREADED_MATRIX_GENERATION) -DENABLE_SENTENCE_COUNT_RECOMPUTE_STEP=$(ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP) -DSENTENCE_COUNT_RECOMPUTE_STEP=$(SENTENCE_COUNT_RECOMPUTE_STEP) -DSENTENCE_RECOMPUTE_STEP_USE_LOG10=$(SENTENCE_RECOMPUTE_STEP_USE_LOG10) -DSENTENCE_COUNT_RECOMPUTE_STEP_LOG10=$(SENTENCE_COUNT_RECOMPUTE_STEP_LOG10) -DENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP=$(ENABLE_DOCUMENT_COUNT_RECOMPUTE_STEP) -DDOCUMENT_COUNT_RECOMPUTE_STEP=$(DOCUMENT_COUNT_RECOMPUTE_STEP) -DDOCUMENT_RECOMPUTE_STEP_USE_LOG10=$(DOCUMENT_RECOMPUTE_STEP_USE_LOG10) -DDOCUMENT_COUNT_RECOMPUTE_STEP_LOG10=$(DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10) -DINPUT_PATH=$(INPUT_PATH) -DOUTPUT_PATH=$(OUTPUT_PATH) -DW2V_PATH=$(W2V_PATH) -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) 
 
@@ -117,39 +123,75 @@ CPP_MACROS_JSONL = -DTARGET_NUMBER_DOCUMENTS=$(TARGET_NUMBER_DOCUMENTS)
 
 ################
 
+ensure_bin_dir:
+	echo "ensure_bin_dir"
+	mkdir -p bin
+
+ensure_updated_udpipe:
+	git submodule update udpipe
+
+ensure_prepared_udpipe: ensure_updated_udpipe
+	set -eu
+	make --directory=udpipe/src
+	make --directory=udpipe/src_lib_only
+
+share_udpipe:
+	mkdir -p $(HOME)/.local/lib
+	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPP_FLAGS) $(OPT_LEVEL_LINK) -shared -fPIC -o $(HOME)/.local/lib/libudpipe.so udpipe/src_lib_only/udpipe.cpp
+	export LD_LIBRARY_PATH=$(HOME)/.local/lib:$$LD_LIBRARY_PATH
+
+obj_udpipe_interface: ensure_bin_dir
+	set -eu
+	echo "obj_udpipe_interface"
+	$(CCPP) --version
+	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) -o bin/udpipe_interface.o -c src/include/udpipe_interface.cpp # ok
+
+obj_measurement: ensure_bin_dir
+	set -eu
+	echo "obj_measurement"
+	$(CC) --version
+	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) -o bin/measurement.o -c src/main_measurement.c $(LINKER_FLAGS) # ok
+
+measurement_link: obj_udpipe_interface obj_measurement
+	echo "measurement_link"
+	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) -flto bin/measurement.o bin/udpipe_interface.o -o bin/main_measurement $(LINKER_FLAGS) -Ludpipe/src_lib_only -ludpipe
+
+measurement_full: ensure_prepared_udpipe measurement_link
+	echo "measurement_full"
+
 measurement_standard:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_optim:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_debug:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_DEBUG) $(CPPFLAGS) $(OPT_LEVEL_DEBUG) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_DEBUG) $(CPPFLAGS) $(OPT_LEVEL_DEBUG) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_pedantic:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_PEDANTIC) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_PEDANTIC) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_coverage:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_COVERAGE) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS)	-o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_COVERAGE) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS)	-o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_profiling:
 	$(CC) --version
 	mkdir -p bin
-	$(CC) $(CFLAGS_PROFILING) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_PROFILING) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
 
 measurement_python_interface:
 	$(CC) --version
-	$(CC) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(PYTHON_INCLUDE_FLAG) -shared -fPIC -o diversutils.so src/diversutilsmodule.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(PYTHON_INCLUDE_FLAG) -shared -fPIC -o diversutils.so src/diversutilsmodule.c $(LINKER_FLAGS)
 
 setup_word2vec_learner:
 	$(CC) --version
@@ -160,29 +202,29 @@ setup_word2vec_learner:
 
 jsonl_to_word2vec_format:
 	$(CC) --version
-	$(CC) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS_JSONL) -o bin/jsonl_to_word2vec_format src/main_jsonl_to_word2vec_format.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS_JSONL) -o bin/jsonl_to_word2vec_format src/main_jsonl_to_word2vec_format.c $(LINKER_FLAGS)
 
 test_graph_relative_proportion:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c -lm -pthread
 
 test_entropy_shannon_weaver:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c -lm -pthread
 
 test_entropy_renyi:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c -lm -pthread
 
 test_entropy_patil_taillie:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c -lm -pthread
 
 test_entropy_q_logarithmic:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c -lm -pthread
 
 test_equivalence_entropy:
 	$(CC) --version
-	$(CC) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c -lm -pthread
+	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c -lm -pthread
 

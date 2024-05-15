@@ -31,7 +31,8 @@
 /**/
 enum {
 	TOKENIZATION_METHOD_REGEX  = 0,
-	TOKENIZATION_METHOD_UDPIPE = 1
+	TOKENIZATION_METHOD_UDPIPE = 1,
+	TOKENIZATION_METHOD_UDPIPE_EMBEDDED = 2
 };
 /**/
 
@@ -57,6 +58,14 @@ enum {
 #include "jsonl/constants.h"
 #include "sorted_array/array.h"
 #include "sanitize.h"
+#include "udpipe_interface/cinterface.h" // external declarations
+#include "udpipe_interface/conversion.h" // transformation to pipes
+
+/*
+extern "C++" {
+	#include "udpipe.h"
+}
+*/
 
 // #if TOKENIZATION_METHOD == REGEX
 // #if TOKENIZATION_METHOD == "REGEX"
@@ -77,6 +86,7 @@ const int32_t REGEX_FLAGS = REG_EXTENDED | REG_ICASE;
 #elif TOKENIZATION_METHOD == 1
 const char* udpipe_repo_directory = "./udpipe";
 const char* udpipe_model_directory = "./udpipe/sandbox_models";
+#elif TOKENIZATION_METHOD == 2
 #else
 	#error "Unknown TOKENIZATION_METHOD"
 #endif
@@ -119,6 +129,10 @@ struct document {
 	regoff_t latest_rm_eo;
 	#elif TOKENIZATION_METHOD == 1
 	FILE* tmp_udpipe_output_file;
+	#elif TOKENIZATION_METHOD == 2
+	FILE* tmp_udpipe_output_file;
+	// int32_t output_pipefd[2];
+	char* heap_char_output;
 	#endif
 	int8_t reached_last_token;
 	int8_t usable;
@@ -127,7 +141,9 @@ struct document {
 	char* text;
 };
 
+// int32_t launch_udpipe(struct document* const doc, struct udpipe_pipeline* const local_pipeline){
 int32_t launch_udpipe(struct document* const doc){
+	// (void*) doc; // to avoid warning in the event we select regex tokenization
 	#if TOKENIZATION_METHOD == 1
 	const char* model_name = "english-ewt-ud-2.5-191206.udpipe";
 	// const char* model_name = "french-sequoia-ud-2.5-191206.udpipe";
@@ -136,10 +152,6 @@ int32_t launch_udpipe(struct document* const doc){
 	char path_model_bfr[path_model_bfr_size];
 	memset(path_model_bfr, '\0', path_model_bfr_size);
 	snprintf(path_model_bfr, path_model_bfr_size, "%s/%s", udpipe_model_directory, model_name);
-
-	for(int32_t i = 0 ; i < doc->text_size ; i++){
-		if(doc->text[i] == '"'){doc->text[i] = ' ';}
-	}
 
 	char* sanitized_text;
 	if(sanitize_for_shell(doc->text, doc->text_size, &sanitized_text) != 0){
@@ -161,12 +173,19 @@ int32_t launch_udpipe(struct document* const doc){
 	}
 	free(sanitized_text); // malloc by sanitize_for_shell
 	free(udpipe_call_bfr);
+	#elif TOKENIZATION_METHOD == 2
+	// if(transform_to_pipes(local_pipeline, doc->text, &(doc->tmp_udpipe_output_file), &(doc->heap_char_output), &(doc->output_pipefd)) != 0){
+	if(transform_to_pipes(doc->text, &(doc->tmp_udpipe_output_file), &(doc->heap_char_output)) != 0){
+		perror("Failed to call transform_to_pipes\n");
+		return 1;
+	}
 	#endif
 	return 0;
 }
 
 int32_t create_document(struct document* doc){
 	#if TOKENIZATION_METHOD == 1
+	/*
 	static uint32_t document_counter = 0;
 	if(document_counter < UINT32_MAX){
 		document_counter++;
@@ -174,6 +193,7 @@ int32_t create_document(struct document* doc){
 		perror("document_counter reached UINT32_MAX\n");
 		return 1;
 	}
+	*/
 	#endif
 
 	size_t malloc_size = JSONL_DOCUMENT_IDENTIFIER_DEFAULT_CAPACITY * sizeof(char);
@@ -212,6 +232,7 @@ int32_t create_document(struct document* doc){
 	return 1;
 }
 
+// int32_t iterate_document_current_token(struct document* const doc, struct udpipe_pipeline* local_pipeline){
 int32_t iterate_document_current_token(struct document* const doc){
 	#if TOKENIZATION_METHOD == 0
 	regmatch_t pmatch[NMATCH];
@@ -232,7 +253,7 @@ int32_t iterate_document_current_token(struct document* const doc){
 	doc->current_token[len] = '\0';
 	doc->latest_rm_eo = objective_eo;
 	return 0;
-	#elif TOKENIZATION_METHOD == 1
+	#elif (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
 	if(doc->tmp_udpipe_output_file != NULL && feof(doc->tmp_udpipe_output_file)){
 		doc->reached_last_token = 1;
 		doc->usable = 0;
@@ -241,9 +262,14 @@ int32_t iterate_document_current_token(struct document* const doc){
 		return 0;
 	}
 	if(doc->tmp_udpipe_output_file == NULL){
+		// fprintf(stderr, "error: doc->tmp_udpipe_output_file == NULL\n");
+		/**/
+		// launch_udpipe(doc, local_pipeline);
 		launch_udpipe(doc);
 		doc->reached_last_token = 0;
 		doc->usable = 0;
+		/**/
+		// return 1;
 	}
 
 	while(fgets(doc->current_token, JSONL_CURRENT_TOKEN_BUFFER_SIZE, doc->tmp_udpipe_output_file) && doc->current_token[0] == '\n'){}
@@ -268,6 +294,17 @@ void free_document(struct document* doc){
 	regfree(&(doc->reg));
 	#elif TOKENIZATION_METHOD == 1
 	pclose(doc->tmp_udpipe_output_file);
+	#elif TOKENIZATION_METHOD == 2
+	if(doc->tmp_udpipe_output_file != NULL){fclose(doc->tmp_udpipe_output_file);}
+	// if(close(doc->output_pipefd[0]) != 0){goto closing_fd_failed;}
+	// if(close(doc->output_pipefd[1]) != 0){goto closing_fd_failed;}
+	if(doc->heap_char_output != NULL){free(doc->heap_char_output);}
+
+	/*
+	closing_fd_failed:
+	perror("Closing output pipefd failed\n");
+	exit(1);
+	*/
 	#endif
 }
 
@@ -314,6 +351,7 @@ void free_jsonl_document_iterator(struct jsonl_document_iterator* jdi){
 	fclose(jdi->file_ptr);
 }
 
+// int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict const jdi, struct udpipe_pipeline* const local_pipeline){
 int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict const jdi){
 	memset(jdi->bfr_read, '\0', JSONL_FILE_READ_BUFFER_SIZE);
 
@@ -568,7 +606,8 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 		jdi->file_is_done = 1;
 	}
 
-	if(launch_udpipe(&(jdi->current_document)) != 0){
+	// if(TOKENIZATION_METHOD == 1 && launch_udpipe(&(jdi->current_document), local_pipeline) != 0){
+	if(TOKENIZATION_METHOD == 1 && launch_udpipe(&(jdi->current_document)) != 0){
 		perror("Failed to call launch_udpipe\n");
 		return 1;
 	}

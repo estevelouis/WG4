@@ -1,0 +1,3 @@
+[submodule "udpipe"]
+	path = diversutils/udpipe
+	url = https://github.com/ufal/udpipe

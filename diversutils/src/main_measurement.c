@@ -401,6 +401,7 @@ int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, cons
 */
 
 int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database,
+	char* w2v_path,
 // 	uint32_t target_column,
 	uint32_t num_row_threads,
 	uint32_t num_matrix_threads,
@@ -488,11 +489,11 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 		struct iterative_state_stirling_from_graph iter_state_stirling;
 		struct iterative_state_pairwise_from_graph iter_state_pairwise;
 		if(create_iterative_state_stirling_from_graph(&iter_state_stirling, g, stirling_alpha, stirling_beta) != 0){
-			perror("failled to call create_iterateive_state_stirling_from_graph\n");
+			perror("failled to call create_iterative_state_stirling_from_graph\n");
 			return 1;
 		}
 		if(create_iterative_state_pairwise_from_graph(&iter_state_pairwise, g) != 0){
-			perror("failled to call create_iterateive_state_pairwise_from_graph\n");
+			perror("failled to call create_iterative_state_pairwise_from_graph\n");
 			return 1;
 		}
 
@@ -562,7 +563,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 		double mu_dist = sum / ((double) (g->num_nodes * (g->num_nodes - 1) / 2));
 
-		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, '?'); // recomputing sigma dist would be expensive
+		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, '?'); // recomputing sigma dist would be expensive
 
 		if(enable_stirling){printf("[log] [end iter] stirling: %f\n", iter_state_stirling.result);}
 		fprintf(f_ptr, "\t%.10e", iter_state_stirling.result);
@@ -574,11 +575,11 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 		int64_t ns_delta, virtual_mem;
 
 		if(enable_output_timing){
-			fprintf(f_timing_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+			fprintf(f_timing_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
 			if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}
 		}
 		if(enable_output_memory){
-			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
 		}
 
 		struct matrix m_mst;
@@ -666,7 +667,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 			if(enable_output_memory){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 		}
 
-		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), W2V_PATH, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
+		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
 
 		if(enable_disparity_functions){
 			if(enable_output_timing){if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}}
@@ -1068,7 +1069,9 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 }
 
 int32_t measurement(
+	char* w2v_path,
 	struct word2vec* w2v,
+	// struct udpipe_pipeline* local_pipeline,
 	char* jsonl_content_key,
 	char* input_path,
 	char* output_path,
@@ -1757,6 +1760,7 @@ int32_t measurement(
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
 						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+	w2v_path,
 	// target_column,
 	num_row_threads,
 	num_matrix_threads,
@@ -1887,6 +1891,7 @@ int32_t measurement(
 				if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 					printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
 					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+	w2v_path,
 	// target_column,
 	num_row_threads,
 	num_matrix_threads,
@@ -1978,6 +1983,7 @@ int32_t measurement(
 				jdi.current_document.identifier_size = 0;
 				memset(jdi.current_document.text, '\0', jdi.current_document.text_size); // ?
 				jdi.current_document.text_size = 0;
+				// if(iterate_jsonl_document_iterator(&jdi, local_pipeline) != 0){
 				if(iterate_jsonl_document_iterator(&jdi) != 0){
 					perror("failed to call iterate_jsonl_document_iterator\n");
 					return 1;
@@ -1986,6 +1992,8 @@ int32_t measurement(
 					continue;
 				}
 				while(!(jdi.current_document.reached_last_token)){
+					// if(iterate_document_current_token(&(jdi.current_document)) != 0){
+					// if(iterate_document_current_token(&(jdi.current_document), local_pipeline) != 0){
 					if(iterate_document_current_token(&(jdi.current_document)) != 0){
 						perror("failed to call iterate_document_current_token\n");
 						return 1;
@@ -2044,6 +2052,7 @@ int32_t measurement(
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
 						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+	w2v_path,
 	// target_column,
 	num_row_threads,
 	num_matrix_threads,
@@ -2174,6 +2183,8 @@ int32_t main(int32_t argc, char** argv){
 	char* argv_output_path = NULL;
 	char* argv_output_path_timing = NULL;
 	char* argv_output_path_memory = NULL;
+	char* argv_udpipe_model_path = NULL;
+	// uint32_t argv_tokenization_method = TOKENIZATION_METHOD;
 	uint32_t argv_target_column = TARGET_COLUMN;
 	uint32_t argv_num_row_threads = NUM_ROW_THREADS;
 	uint32_t argv_num_matrix_threads = NUM_MATRIX_THREADS;
@@ -2262,6 +2273,7 @@ int32_t main(int32_t argc, char** argv){
 		else if(strncmp(argv[i], "--output_path=", 14) == 0){argv_output_path = argv[i] + 14;}
 		else if(strncmp(argv[i], "--output_path_timing=", 21) == 0){argv_output_path_timing = argv[i] + 21;}
 		else if(strncmp(argv[i], "--output_path_memory=", 21) == 0){argv_output_path_memory = argv[i] + 21;}
+		else if(strncmp(argv[i], "--udpipe_model_path=", 20) == 0){argv_udpipe_model_path = argv[i] + 20;}
 		else if(strncmp(argv[i], "--enable_multithreaded_matrix_generation=", 41) == 0){argv_enable_multithreaded_matrix_generation = (argv[i][41] == '1');}
 		else if(strncmp(argv[i], "--enable_timings=", 17) == 0){argv_enable_timings = (argv[i][18] == '1');}
 		else if(strncmp(argv[i], "--enable_iterative_distance_computation=", 40) == 0){argv_enable_iterative_distance_computation = (argv[i][40] == '1');}
@@ -2326,6 +2338,7 @@ int32_t main(int32_t argc, char** argv){
 		else if(strncmp(argv[i], "--document_count_recompute_step=", 32) == 0){argv_document_count_recompute_step = strtol(argv[i] + 32, NULL, 10);}
 		else if(strncmp(argv[i], "--document_count_recompute_step_log10=", 38) == 0){argv_document_count_recompute_step_log10 = strtod(argv[i] + 38, NULL);}
 		else if(strncmp(argv[i], "--force_timing_and_memory_to_output_path=", 41) == 0){argv_force_timing_and_memory_to_output_path = (argv[i][41] == '1');}
+		// else if(strncmp(argv[i], "--tokenization_method=", 22) == 0){argv_tokenization_method = strtol(argv[i] + 22, NULL, 10);}
 		else {fprintf(stderr, "Unknown argument: %s\n", argv[i]); return 1;}
 	}
 
@@ -2335,6 +2348,7 @@ int32_t main(int32_t argc, char** argv){
 	if(argv_output_path == NULL){argv_output_path = OUTPUT_PATH;}
 	if(argv_output_path_timing == NULL){argv_output_path_timing = OUTPUT_PATH_TIMING;}
 	if(argv_output_path_memory == NULL){argv_output_path_memory = OUTPUT_PATH_MEMORY;}
+	if(argv_udpipe_model_path == NULL && TOKENIZATION_METHOD == 2){fprintf(stderr, "Setting TOKENIZATION_METHOD to 2 (embedded UDPipe) requires defining --udpipe_model_path=...\n"); return 1;}
 
 	if(argv_force_timing_and_memory_to_output_path){
 		size_t path_len, delta, alloc_size, len_suffix;
@@ -2371,6 +2385,9 @@ int32_t main(int32_t argc, char** argv){
 	printf("force_timing_and_memory_to_output_path: %u\n", argv_force_timing_and_memory_to_output_path);
 	printf("output_path_timing: %s\n", argv_output_path_timing);
 	printf("output_path_memory: %s\n", argv_output_path_memory);
+	#if TOKENIZATION_METHOD == 2
+	printf("udpipe_model_path: %s\n", argv_udpipe_model_path);
+	#endif
 
 	printf("target_column: %u\n", argv_target_column);
 	printf("num_row_threads: %u\n", argv_num_row_threads);
@@ -2445,6 +2462,7 @@ int32_t main(int32_t argc, char** argv){
 	printf("hill_evenness_alpha: %f\n", argv_hill_evenness_alpha);
 	printf("hill_evenness_beta: %f\n", argv_hill_evenness_beta);
 
+	ensure_proper_udpipe_pipeline_size();
 	jsonl_init_tokenization();
 
 	int32_t err;
@@ -2460,8 +2478,16 @@ int32_t main(int32_t argc, char** argv){
 		return 1;
 	}
 
+	#if TOKENIZATION_METHOD == 2
+	// udpipe_pipeline_create_global("/home/esteve/Documents/thesis/other_repos/udpipe/sandbox_models/english-ewt-ud-2.5-191206.udpipe", "tokenizer", "none", "none", "vertical"); // unsure about "none" for parser
+	udpipe_pipeline_create_global(argv_udpipe_model_path, "tokenizer", "none", "none", "vertical"); // unsure about "none" for parser
+	udpipe_pipeline_print_global_info();
+	#endif
+
 	err = measurement(
+		argv_w2v_path,
 		&w2v,
+		// &local_pipeline,
 		argv_jsonl_content_key,
 		argv_input_path,
 		argv_output_path,
@@ -2552,6 +2578,7 @@ int32_t main(int32_t argc, char** argv){
 		free(argv_output_path_timing);
 		free(argv_output_path_memory);
 	}
+
 	return 0;
 
 	malloc_fail:
