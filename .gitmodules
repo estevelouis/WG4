@@ -1,3 +1,6 @@
 [submodule "udpipe"]
 	path = diversutils/udpipe
 	url = https://github.com/ufal/udpipe
+[submodule "diversutils/udpipe"]
+	path = diversutils/udpipe
+	url = https://github.com/ufal/udpipe
