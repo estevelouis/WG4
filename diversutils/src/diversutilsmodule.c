@@ -32,7 +32,10 @@
 #include "graph.h"
 #include "cfgparser/parser.h"
 
+/*
 #include "measurement.h"
+*/
+#include "dfunctions.h"
 
 enum {
 	ID_ENTROPY_SHANNON_WEAVER,
@@ -80,6 +83,7 @@ static struct word2vec* global_word2vecs = NULL;
 
 static struct cfg* configurations = NULL;
 
+/* // DO NOT REMOVE
 static PyObject* interface_measurement_from_cfg(PyObject* self, PyObject* args){
 	char* config_path;
 
@@ -102,6 +106,7 @@ static PyObject* interface_measurement_from_cfg(PyObject* self, PyObject* args){
 	res = Py_BuildValue("i", 0);
 	return res;
 }
+*/
 
 static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
 	PyObject* res;
@@ -123,17 +128,9 @@ static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
 
-	/*
-	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
-	global_word2vecs = realloc(global_word2vecs, alloc_size);
-	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
-	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
-	*/
-
 	alloc_size = (num_graphs + 1) * sizeof(int32_t);
 	global_graphs_word2vec_bindings = realloc(global_graphs_word2vec_bindings, alloc_size);
 	if(global_graphs_word2vec_bindings == NULL){perror("failed to realloc\n"); goto exit_failure;}
-	// memset((void*) &(global_graphs_word2vec_bindings[num_graphs]), '\0', sizeof(int32_t));
 	global_graphs_word2vec_bindings[num_graphs] = -1;
 
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
@@ -178,17 +175,9 @@ static PyObject* interface_create_graph(PyObject* self, PyObject* args){
 	if(global_graphs_freed == NULL){perror("failed to realloc\n"); goto exit_failure;}
 	memset((void*) &(global_graphs_freed[num_graphs]), '\0', sizeof(uint8_t));
 
-	/*
-	alloc_size = (num_graphs + 1) * sizeof(struct word2vec);
-	global_word2vecs = realloc(global_word2vecs, alloc_size);
-	if(global_word2vecs == NULL){perror("failed to realloc\n"); goto exit_failure;}
-	memset((void*) &(global_word2vecs[num_graphs]), '\0', sizeof(struct word2vec));
-	*/
-
 	alloc_size = (num_graphs + 1) * sizeof(int32_t);
 	global_graphs_word2vec_bindings = realloc(global_graphs_word2vec_bindings, alloc_size);
 	if(global_graphs_word2vec_bindings == NULL){perror("failed to realloc\n"); goto exit_failure;}
-	// memset((void*) &(global_graphs_word2vec_bindings[num_graphs]), '\0', sizeof(int32_t));
 	global_graphs_word2vec_bindings[num_graphs] = -1;
 
 	alloc_size = (num_graphs + 1) * sizeof(struct cfg);
@@ -235,7 +224,6 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 
 	if(global_graphs_freed[index] == 0){
 		free_graph(&(global_graphs[index]));
-		// free_word2vec(&(global_word2vecs[index]));
 		free_cfg(&(configurations[index]));
 		global_graphs_freed[index] = 1;
 	} else {
@@ -336,12 +324,29 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 	char* key;
 	int32_t w2v_index;
 
+	struct word2vec_entry* word2vec_entry_pointer;
+	float* vector_pointer;
+
 	key = NULL;
 
 	if(!PyArg_ParseTuple(args, "ii|s", &index, &absolute_proportion, &key)){return NULL;}
 	if(index < 0){perror("index must be >= 0\n"); return NULL;}
 	if(((uint32_t) index) >= num_graphs){perror("index too high\n"); return NULL;}
 	if(absolute_proportion < 0){perror("absolute proportion cannot be negative\n"); return NULL;}
+
+	word2vec_entry_pointer = NULL;
+	vector_pointer = NULL;
+
+	if(key != NULL){
+		if(global_graphs_word2vec_bindings[index] < 0){perror("No Word2Vec bound to graph\n"); return NULL;}
+		w2v_index = word2vec_key_to_index(&(global_word2vecs[global_graphs_word2vec_bindings[index]]), key);
+		if(w2v_index == -1){
+			fprintf(stdout, "unknown key: %s\n", key);
+			return NULL;
+		}
+		word2vec_entry_pointer = &(global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index]);
+		vector_pointer = global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index].vector;
+	}
 
 	if(global_graphs[index].num_nodes == global_graphs[index].capacity){
 		if(request_more_capacity_graph(&(global_graphs[index])) != 0){
@@ -355,18 +360,9 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 		return NULL;
 	}
 	global_graphs[index].nodes[global_graphs[index].num_nodes].absolute_proportion = (uint32_t) absolute_proportion;
-
-	if(key != NULL){
-		if(global_graphs_word2vec_bindings[index] < 0){perror("No Word2Vec bound to graph\n"); return NULL;}
-		w2v_index = word2vec_key_to_index(&(global_word2vecs[global_graphs_word2vec_bindings[index]]), key);
-		if(w2v_index == -1){
-			fprintf(stdout, "unknown key: %s\n", key);
-			return NULL;
-		}
-		global_graphs[index].nodes[global_graphs[index].num_nodes].word2vec_entry_pointer = &(global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index]);
-		global_graphs[index].nodes[global_graphs[index].num_nodes].vector.fp32 = global_word2vecs[global_graphs_word2vec_bindings[index]].keys[w2v_index].vector;
-		global_graphs[index].nodes[global_graphs[index].num_nodes].num_dimensions = global_graphs[index].num_dimensions;
-	}
+	global_graphs[index].nodes[global_graphs[index].num_nodes].word2vec_entry_pointer = word2vec_entry_pointer;
+	global_graphs[index].nodes[global_graphs[index].num_nodes].vector.fp32 = vector_pointer;
+	global_graphs[index].nodes[global_graphs[index].num_nodes].num_dimensions = global_graphs[index].num_dimensions;
 
 	global_graphs[index].num_nodes++;
 
@@ -415,7 +411,7 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 		perror("index too high\n");
 		return NULL;
 	}
-
+	
 	double res1, res2;
 	switch(id_function){
 		case ID_ENTROPY_SHANNON_WEAVER:
@@ -526,6 +522,7 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 	}
 }
 
+/* // DO NOT REMOVE
 static PyObject* interface_cfg_get_value(PyObject* self, PyObject* args){
 	int32_t index;
 	char* key;
@@ -553,6 +550,7 @@ static PyObject* interface_cfg_get_value(PyObject* self, PyObject* args){
 	}
 	return res;
 }
+*/
 
 static PyObject* interface_free_globals(PyObject* self, PyObject* args){
 	if(global_graphs != NULL){free(global_graphs);}
@@ -570,8 +568,8 @@ static PyMethodDef diversutilsmethods[] = {
 	{"create_graph", interface_create_graph, METH_VARARGS, "Create a graph. This returns the graph index. ARGS: num_nodes, num_dimensions, config_path."},
 	{"create_empty_graph", interface_create_empty_graph, METH_VARARGS, "Create a an graph. This returns the graph index. ARGS: num_nodes, num_dimensions."},
 	{"free_graph", interface_free_graph, METH_VARARGS, "Free a graph. This requires the graph index."},
-	{"cfg_get_value", interface_cfg_get_value, METH_VARARGS, "Provide a graph index, and a key to fetch."},
-	{"measurement_from_cfg", interface_measurement_from_cfg, METH_VARARGS, "Call measurement function."},
+	// {"cfg_get_value", interface_cfg_get_value, METH_VARARGS, "Provide a graph index, and a key to fetch."}, // DO NOT REMOVE
+	// {"measurement_from_cfg", interface_measurement_from_cfg, METH_VARARGS, "Call measurement function."}, // DO NOT REMOVE
 	{"add_node", interface_add_node, METH_VARARGS, "Add a node (args: graph index, number of dimensions, absolute proportion)."},
 	{"individual_measure", interface_individual_measure, METH_VARARGS, "Compute an individual measure. ARGS: graph index, measure index, order 1 (optional), order 2 (optional)."},
 	{"compute_relative_proportion", interface_compute_relative_proportions, METH_VARARGS, "Compute relative proportions. ARGS: graph index."},
