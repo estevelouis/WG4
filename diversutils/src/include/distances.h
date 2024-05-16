@@ -73,6 +73,7 @@ float cosine_distance_norm_fp32(float* restrict a, float* restrict b, int32_t n)
 	return cosine_distance_fp32(a, b, n) / 2.0f;
 }
 
+#if ENABLE_AVX256 == 1
 float cosine_distance_fp32_avx(const float* restrict const a, const float* restrict const b, const int32_t n){
 	float upper_sum = 0.0;
 	float lower_sum_a = 0.0;
@@ -86,61 +87,24 @@ float cosine_distance_fp32_avx(const float* restrict const a, const float* restr
 	float vec_lower_sum_a[8];
 	float vec_lower_sum_b[8];
 
-	/*
 	int32_t i = 0;
 	while(i < n){
-		
-	}
-	*/
-	// const int32_t i_limit = n >> 3;
-	// const int32_t i_limit = (int32_t) floor(n / 8);
-	
-	int32_t i = 0;
-	while(i < n){
-		// printf("i: %i / %i\n", i, n);
-		// __m256 avx256_a = _mm256_load_ps(&(a[i]));
-		// __m256 avx256_b = _mm256_load_ps(&(b[i]));
 		__m256 avx256_a = _mm256_loadu_ps(&(a[i])); // had to load unaligned
 		__m256 avx256_b = _mm256_loadu_ps(&(b[i]));
-		// memcpy(&avx256_a, &(a[i]), 32);
-		// memcpy(&avx256_b, &(b[i]), 32);
 
-		/**/
 		__m256 avx256_local_upper_sum = _mm256_mul_ps(avx256_a, avx256_b);
 		avx256_upper_sum = _mm256_add_ps(avx256_upper_sum, avx256_local_upper_sum);
-		// __m256 new_avx256_upper_sum = _mm256_add_ps(avx256_upper_sum, avx256_local_upper_sum);
-		// avx256_upper_sum = new_avx256_upper_sum;
-		/**/
-
-
-		// _mm256_fmmul_ps(avx256_a, avx256_b);
-
-		// printf("1 ");
 
 		// ----
 
 		__m256 avx256_local_lower_sum_a = _mm256_mul_ps(avx256_a, avx256_a);
 		avx256_lower_sum_a = _mm256_add_ps(avx256_lower_sum_a, avx256_local_lower_sum_a);
-		// __m256 new_avx256_lower_sum_a = _mm256_add_ps(avx256_lower_sum_a, avx256_local_lower_sum_a);
-		// avx256_lower_sum_a = new_avx256_lower_sum_a;
-
-		// printf("2 ");
 
 		__m256 avx256_local_lower_sum_b = _mm256_mul_ps(avx256_b, avx256_b);
 		avx256_lower_sum_b = _mm256_add_ps(avx256_lower_sum_b, avx256_local_lower_sum_b);
-		// __m256 new_bvx256_lower_sum_b = _mm256_add_ps(avx256_lower_sum_b, avx256_local_lower_sum_b);
-		// avx256_lower_sum_b = new_bvx256_lower_sum_b;
-
-		// printf("3\n");
 
 		i += 8;
 	}
-
-	/*
-	_mm256_store_ps(vec_upper_sum, avx256_upper_sum);
-	_mm256_store_ps(vec_lower_sum_a, avx256_lower_sum_a);
-	_mm256_store_ps(vec_lower_sum_b, avx256_lower_sum_b);
-	*/
 
 	_mm256_storeu_ps(vec_upper_sum, avx256_upper_sum);
 	_mm256_storeu_ps(vec_lower_sum_a, avx256_lower_sum_a);
@@ -161,6 +125,7 @@ float cosine_distance_fp32_avx(const float* restrict const a, const float* restr
 	float cosine_similarity = (upper_sum / (sqrtf(lower_sum_a) * sqrtf(lower_sum_b)));
 	return (1.0f - cosine_similarity);
 }
+#endif
 
 double cosine_distance(const double* restrict const a, const double* restrict const b, const int n){
 	double upper_sum = 0.0;

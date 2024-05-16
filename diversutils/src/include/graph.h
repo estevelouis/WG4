@@ -43,7 +43,7 @@
 #include "stats.h"
 
 #ifndef ENABLE_AVX256
-#define ENABLE_AVX256 1
+#define ENABLE_AVX256 0
 #endif
 
 /*
@@ -220,11 +220,11 @@ int32_t distance_matrix_from_graph(const struct graph* const restrict g, struct 
 		for(uint64_t j = i + 1 ; j < m->b ; j++){
 			switch(m->fp_mode){
 				case FP32:
-					if(ENABLE_AVX256){
-						m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					} else {
-						m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					}
+					#if ENABLE_AVX256 == 1
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#else
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#endif
 					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
 					break;
 				case FP64:
@@ -254,22 +254,22 @@ void* row_thread(void* args){
 	uint64_t end_j = ((struct row_thread_arg*) args)->end_j;
 
 	for(uint64_t j = start_j ; j < end_j ; j++){
-		if(ENABLE_AVX256){
-			vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		} else {
-			vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		}
+		#if ENABLE_AVX256 == 1
+		vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#else
+		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#endif
 	}
 	return NULL;
 }
 
 inline void distance_row_from_graph(const struct graph* const restrict g, const int32_t i, float* const restrict vector){
 	for(uint64_t j = 0 ; j < g->num_nodes ; j++){
-		if(ENABLE_AVX256){
-			vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		} else {
-			vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		}
+		#if ENABLE_AVX256 == 1
+		vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#else
+		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#endif
 	}
 }
 
@@ -321,11 +321,11 @@ void* batch_row_thread(void* args){
 	uint64_t end_j = ((struct row_thread_arg*) args)->end_j;
 
 	for(uint64_t j = start_j ; j < end_j ; j++){
-		if(ENABLE_AVX256){
-			vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		} else {
-			vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-		}
+		#if ENABLE_AVX256 == 1
+		vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#else
+		vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+		#endif
 	}
 	return NULL;
 }
@@ -408,11 +408,11 @@ void* matrix_thread(void* args){
 		for(uint64_t j = i + 1 ; j < m->b ; j++){
 			switch(m->fp_mode){
 				case FP32:
-					if(ENABLE_AVX256){
-						m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					} else {
-						m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					}
+					#if ENABLE_AVX256 == 1
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#else
+					m->bfr.fp32[i * m->b + j] = (float) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#endif
 					m->bfr.fp32[j * m->b + i] = m->bfr.fp32[i * m->b + j];
 					break;
 				case FP64:
@@ -990,21 +990,21 @@ struct word2vec_entry* word2vec_find_closest(const struct word2vec* restrict w2v
 	}
 	float distance_best;
 		
-	if(ENABLE_AVX256){
-		distance_best = cosine_distance_fp32_avx(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
-	} else {
-		distance_best = cosine_distance_fp32(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
-	}
+	#if ENABLE_AVX256 == 1
+	distance_best = cosine_distance_fp32_avx(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+	#else
+	distance_best = cosine_distance_fp32(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+	#endif
 	for(uint64_t i = 1 ; i < w2v->num_vectors ; i++){
 		if(i == (uint64_t) index_target){
 			continue;
 		}
 		float local_distance;
-		if(ENABLE_AVX256){
-			local_distance = cosine_distance_fp32_avx(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
-		} else {
-			local_distance = cosine_distance_fp32(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
-		}
+		#if ENABLE_AVX256 == 1
+		local_distance = cosine_distance_fp32_avx(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+		#else
+		local_distance = cosine_distance_fp32(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+		#endif
 		if(local_distance < distance_best){
 			distance_best = local_distance;
 			index_best = i;
@@ -1043,11 +1043,11 @@ void create_distance_two_nodes(struct distance_two_nodes* restrict distance, str
 	if(distance_value == NULL){
 		switch(fp_mode){
 			case GRAPH_NODE_FP32:
-				if(ENABLE_AVX256){
-					distance->distance = cosine_distance_fp32_avx(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t) a->num_dimensions);
-				} else {
-					distance->distance = cosine_distance_fp32(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t) a->num_dimensions);
-				}
+				#if ENABLE_AVX256 == 1
+				distance->distance = cosine_distance_fp32_avx(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t) a->num_dimensions);
+				#else
+				distance->distance = cosine_distance_fp32(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t) a->num_dimensions);
+				#endif
 				break;
 			case GRAPH_NODE_FP64:
 				distance->distance = cosine_distance(distance->a->vector.fp64, distance->b->vector.fp64, (int32_t) a->num_dimensions);
@@ -1585,11 +1585,11 @@ int32_t functional_dispersion_from_graph(struct graph* const g, double* const re
 	for(uint64_t i = 0 ; i < (*g).num_nodes ; i++){
 		switch(fp_mode){
 			case GRAPH_NODE_FP32:
-				if(ENABLE_AVX256){
-					result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
-				} else {
-					result += cosine_distance_fp32(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
-				}
+				#if ENABLE_AVX256 == 1
+				result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
+				#else
+				result += cosine_distance_fp32(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
+				#endif
 				break;
 			case GRAPH_NODE_FP64:
 				result += cosine_distance(g->nodes[i].vector.fp64, centroid.vector.fp64, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
@@ -1666,11 +1666,11 @@ int32_t functional_divergence_modified_from_graph(struct graph* const g, double*
 	for(uint64_t i = 0 ; i < g->num_nodes ; i++){
 		switch(fp_mode){
 			case GRAPH_NODE_FP32:
-				if(ENABLE_AVX256){
-					distances_to_centroid[i] = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
-				} else {
-					distances_to_centroid[i] = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
-				}
+				#if ENABLE_AVX256 == 1
+				distances_to_centroid[i] = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
+				#else
+				distances_to_centroid[i] = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
+				#endif
 				break;
 			case GRAPH_NODE_FP64:
 				distances_to_centroid[i] = cosine_distance(g->nodes[i].vector.fp64, centroid.vector.fp64, g->nodes[i].num_dimensions) * g->nodes[i].relative_proportion;
@@ -1704,8 +1704,6 @@ int32_t functional_divergence_modified_from_graph(struct graph* const g, double*
 
 /* ==== ITERATIVE FUNCTIONS ==== */
 
-/* ---- PAIRWISE ---- */
-
 struct iterative_state_pairwise_from_graph {
 	int32_t i;
 	int64_t n;
@@ -1713,6 +1711,27 @@ struct iterative_state_pairwise_from_graph {
 	struct graph* g;
 	pthread_mutex_t mutex;
 };
+
+struct iterative_state_stirling_from_graph {
+	int32_t i;
+	int64_t n;
+	double alpha;
+	double beta;
+	double result;
+	struct graph* g;
+	pthread_mutex_t mutex;
+};
+
+struct thread_args_aggregator {
+	union {
+		struct iterative_state_pairwise_from_graph* const pairwise;
+		struct iterative_state_stirling_from_graph* const stirling;
+	} iter_state;
+	int32_t i;
+	const float* const vector;
+};
+
+/* ---- PAIRWISE ---- */
 
 int32_t create_iterative_state_pairwise_from_graph(struct iterative_state_pairwise_from_graph* const restrict iter_state, struct graph* const g){
 	iter_state->i = 0; // single-threaded version uses this one, but multi-threaded version uses other i
@@ -1730,41 +1749,18 @@ void iterate_iterative_state_pairwise_from_graph(struct iterative_state_pairwise
 	iter_state->i++;
 }
 
-struct thread_args_aggregator {
-	union {
-		struct iterative_state_pairwise_from_graph* const pairwise;
-	} iter_state;
-	int32_t i;
-	const float* const vector;
-};
-
-void* iterate_iterative_state_pairwise_from_graph_avx_thread(void* args){
+void* iterate_iterative_state_pairwise_from_graph_thread(void* args){
 	struct iterative_state_pairwise_from_graph* iter_state = ((struct thread_args_aggregator*) args)->iter_state.pairwise;
 	const float* const vector = ((struct thread_args_aggregator*) args)->vector;
-	// uint64_t i = iter_state->i + 1;
-	uint64_t i = ((struct thread_args_aggregator*) args)->i + 1;
+	uint64_t j = ((struct thread_args_aggregator*) args)->i + 1;
 
-	__m256 avx_sum = _mm256_setzero_ps();
+	float sum = 0.0f;
 
 	const uint64_t n = (uint64_t) iter_state->g->num_nodes;
-	while(i < n){
-		avx_sum = _mm256_add_ps(avx_sum, _mm256_loadu_ps(&(vector[i])));
-		i += 8;
+	while(j < n){
+		sum += vector[j];
+		j++;
 	}
-
-	float sum = 0.0;
-	float local_vec[8];
-	_mm256_storeu_ps(local_vec, avx_sum);
-	for(int32_t j = 0 ; j < 8 ; j++){
-		sum += local_vec[j];
-	}
-
-	while(i < n){
-		sum += vector[i];
-		i++;
-	}
-
-	// printf("
 
 	pthread_mutex_lock(&(iter_state->mutex));
 	iter_state->result += sum;
@@ -1773,21 +1769,46 @@ void* iterate_iterative_state_pairwise_from_graph_avx_thread(void* args){
 	return NULL;
 }
 
+#if ENABLE_AVX256 == 1
+void* iterate_iterative_state_pairwise_from_graph_avx_thread(void* args){
+	struct iterative_state_pairwise_from_graph* iter_state = ((struct thread_args_aggregator*) args)->iter_state.pairwise;
+	const float* const vector = ((struct thread_args_aggregator*) args)->vector;
+	uint64_t j = ((struct thread_args_aggregator*) args)->i + 1;
+
+	__m256 avx_sum = _mm256_setzero_ps();
+
+	const uint64_t n = (uint64_t) iter_state->g->num_nodes;
+	while(j < n){
+		avx_sum = _mm256_add_ps(avx_sum, _mm256_loadu_ps(&(vector[j])));
+		j += 8;
+	}
+
+	float sum = 0.0;
+	float local_vec[8];
+	_mm256_storeu_ps(local_vec, avx_sum);
+	for(int32_t k = 0 ; k < 8 ; k++){
+		sum += local_vec[k];
+	}
+
+	while(j < n){
+		sum += vector[j];
+		j++;
+	}
+
+	pthread_mutex_lock(&(iter_state->mutex));
+	iter_state->result += sum;
+	pthread_mutex_unlock(&(iter_state->mutex));
+
+	return NULL;
+}
+#endif
+
 void finalise_iterative_state_pairwise_from_graph(struct iterative_state_pairwise_from_graph* const restrict iter_state){
 	iter_state->result /= (double) iter_state->n;
 	pthread_mutex_destroy(&(iter_state->mutex));
 }
 
 /* ---- STIRLING ---- */
-
-struct iterative_state_stirling_from_graph {
-	int32_t i;
-	int64_t n;
-	double alpha;
-	double beta;
-	double result;
-	struct graph* g;
-};
 
 int32_t create_iterative_state_stirling_from_graph(struct iterative_state_stirling_from_graph* const restrict iter_state, struct graph* const g, double alpha, double beta){
 	iter_state->i = 0;
@@ -1804,6 +1825,26 @@ void iterate_iterative_state_stirling_from_graph(struct iterative_state_stirling
 		iter_state->result += pow((double) vector[j], iter_state->alpha) * pow(iter_state->g->nodes[iter_state->i].relative_proportion * iter_state->g->nodes[j].relative_proportion, iter_state->beta);
 	}
 	iter_state->i++;
+}
+
+void* iterate_iterative_state_stirling_from_graph_thread(void* args){
+	struct iterative_state_stirling_from_graph* iter_state = ((struct thread_args_aggregator*) args)->iter_state.stirling;
+	const float* const vector = ((struct thread_args_aggregator*) args)->vector;
+	uint64_t j = ((struct thread_args_aggregator*) args)->i + 1;
+
+	double sum = 0.0;
+
+	const uint64_t n = (uint64_t) iter_state->g->num_nodes;
+	while(j < n){
+		sum += pow((double) vector[j], iter_state->alpha) * pow(iter_state->g->nodes[iter_state->i].relative_proportion * iter_state->g->nodes[j].relative_proportion, iter_state->beta);
+		j++;
+	}
+
+	pthread_mutex_lock(&(iter_state->mutex));
+	iter_state->result += sum;
+	pthread_mutex_unlock(&(iter_state->mutex));
+
+	return NULL;
 }
 
 // ================
@@ -1833,11 +1874,11 @@ int32_t pairwise_from_graph(struct graph* const g, double* const result_buffer, 
 			}
 			switch(fp_mode){
 				case GRAPH_NODE_FP32:
-					if(ENABLE_AVX256){
-						result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					} else {
-						result += cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					}
+					#if ENABLE_AVX256 == 1
+					result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#else
+					result += cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#endif
 					break;
 				case GRAPH_NODE_FP64:
 					result += cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
@@ -2198,11 +2239,11 @@ int32_t weitzman_from_graph(struct graph* const g, double* const res, const int8
 			double distance = 0.0;
 			switch(fp_mode){
 				case FP32:
-					if(ENABLE_AVX256){
-						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					} else {
-						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-					}
+					#if ENABLE_AVX256 == 1
+					distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#else
+					distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+					#endif
 					m.bfr.fp32[index_in_buffer] = (float) distance;
 					break;
 				case FP64:
@@ -2407,11 +2448,11 @@ int32_t lexicographic_from_graph(struct graph* const g, double* const res, long 
 				double distance = 0.0;
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 						m.bfr.fp32[index_in_buffer] = (float) distance;
 						break;
 					case FP64:
@@ -2458,11 +2499,11 @@ int32_t stirling_from_graph(struct graph* g, double* restrict const result, cons
 			} else {
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 						break;
 					case FP64:
 						distance = cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
@@ -2503,11 +2544,11 @@ int32_t ricotta_szeidl_from_graph(struct graph* const g, double* const result, c
 			} else {
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 						break;
 					case FP64:
 						distance = cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
@@ -2569,11 +2610,11 @@ int32_t chao_et_al_functional_diversity_from_graph(struct graph* const g, double
 			} else {
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 						break;
 					case FP64:
 						distance = cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
@@ -2664,11 +2705,11 @@ int32_t leinster_cobbold_diversity_from_graph(struct graph* const g, double* con
 			} else {
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 						break;
 					case FP64:
 						distance = cosine_distance(g->nodes[i].vector.fp64, g->nodes[j].vector.fp64, g->nodes[i].num_dimensions);
@@ -2744,11 +2785,11 @@ int32_t scheiner_species_phylogenetic_functional_diversity_from_graph(struct gra
 				// the paper makes use of euclidean distance
 				switch(fp_mode){
 					case FP32:
-						if(ENABLE_AVX256){
-							distance = (long double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						} else {
-							distance = (long double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
-						}
+						#if ENABLE_AVX256 == 1
+						distance = (long double) cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#else
+						distance = (long double) cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+						#endif
 	
 						// distance = (long double) minkowski_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, 2.0,  g->nodes[i].num_dimensions);
 						break;
