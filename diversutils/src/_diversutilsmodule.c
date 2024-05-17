@@ -591,7 +591,7 @@ static struct PyModuleDef diversutilsmodule = {
 	NULL, // freefunc m_free, "A function to call during deallocation of the module object, or NULL if not needed"
 };
 
-PyMODINIT_FUNC PyInit_diversutils(void){
+PyMODINIT_FUNC PyInit__diversutils(void){
 	PyObject* mod = PyModule_Create(&diversutilsmodule);
 	PyModule_AddIntConstant(mod, "DF_ENTROPY_SHANNON_WEAVER", ID_ENTROPY_SHANNON_WEAVER);
 	PyModule_AddIntConstant(mod, "DF_ENTROPY_Q_LOGARITHMIC", ID_ENTROPY_Q_LOGARITHMIC);

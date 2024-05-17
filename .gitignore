@@ -15,3 +15,5 @@ diversutils/test/test_entropy_renyi
 diversutils/test/test_entropy_patil_taillie
 diversutils/test/test_entropy_shannon_weaver
 diversutils/test/test_graph_relative_proportion
+diversutils/diversutils/__pycache__
+diversutils/diversutils/__pycache__/*
