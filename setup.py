@@ -15,7 +15,7 @@ setup(
     version="0.1.1",
     #location=location,
     packages=["diversutils"],
-    package_dir={"diversutils": "diversutils"},
+    package_dir={"": "diversutils"}, # says that the root directory to search from is "diversutils" (https://docs.python.org/3.8/distutils/setupscript.html#listing-whole-packages)
     ext_modules = [
         Extension(
             name="_diversutils",
