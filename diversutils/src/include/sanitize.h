@@ -3,7 +3,7 @@
 
 int32_t sanitize_for_shell(const char* const s, const size_t n, char** const z){
 	size_t alloc_size = n + 1024;
-	int32_t i, j;
+	size_t i, j;
 
 	(*z) = malloc(alloc_size * sizeof(char));
 	if((*z) == NULL){

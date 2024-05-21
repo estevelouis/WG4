@@ -1722,10 +1722,21 @@ struct iterative_state_stirling_from_graph {
 	pthread_mutex_t mutex;
 };
 
+struct iterative_state_leinster_cobbold_from_graph {
+	int32_t i;
+	int64_t n;
+	double alpha;
+	double hill_number;
+	double entropy;
+	struct graph* g;
+	pthread_mutex_t mutex;
+};
+
 struct thread_args_aggregator {
 	union {
 		struct iterative_state_pairwise_from_graph* const pairwise;
 		struct iterative_state_stirling_from_graph* const stirling;
+		struct iterative_state_leinster_cobbold_from_graph* const leinster_cobbold;
 	} iter_state;
 	int32_t i;
 	const float* const vector;
@@ -1817,6 +1828,7 @@ int32_t create_iterative_state_stirling_from_graph(struct iterative_state_stirli
 	iter_state->beta = beta;
 	iter_state->result = 0.0;
 	iter_state->g = g;
+	pthread_mutex_init(&(iter_state->mutex), NULL);
 	return 0;
 }
 
@@ -1845,6 +1857,87 @@ void* iterate_iterative_state_stirling_from_graph_thread(void* args){
 	pthread_mutex_unlock(&(iter_state->mutex));
 
 	return NULL;
+}
+
+void finalise_iterative_state_stirling_from_graph(struct iterative_state_stirling_from_graph* const restrict iter_state){
+	pthread_mutex_destroy(&(iter_state->mutex));
+}
+
+/* ---- LEINSTER_COBBOLD ---- */
+
+int32_t create_iterative_state_leinster_cobbold_from_graph(struct iterative_state_leinster_cobbold_from_graph* const restrict iter_state, struct graph* const g, double alpha){
+	iter_state->i = 0;
+	iter_state->n = (g->num_nodes * (g->num_nodes - 1)) / 2;
+	iter_state->alpha = alpha;
+	if(alpha != 1.0){
+		iter_state->hill_number = 0.0;
+	} else {
+		iter_state->hill_number = 1.0;
+	}
+	iter_state->entropy = 0.0;
+	iter_state->g = g;
+	pthread_mutex_init(&(iter_state->mutex), NULL);
+	return 0;
+}
+
+void iterate_iterative_state_leinster_cobbold_from_graph(struct iterative_state_leinster_cobbold_from_graph* const restrict iter_state, const float* const vector){
+	const double u = 1.0;
+
+	double local_agg = 0.0;
+	for(uint64_t j = 0 ; j < iter_state->g->num_nodes ; j++){
+		double distance = (double) vector[j];
+		double similarity = 1.0 - distance;
+		local_agg += iter_state->g->nodes[j].relative_proportion * pow(E, -u * similarity);
+	}
+	if(iter_state->alpha != 1.0){
+		iter_state->hill_number += pow(local_agg, iter_state->alpha - 1.0);
+	} else {
+		iter_state->hill_number *= pow(local_agg, iter_state->g->nodes[iter_state->i].relative_proportion);
+	}
+	iter_state->i++;
+}
+
+void* iterate_iterative_state_leinster_cobbold_from_graph_thread(void* args){
+	struct iterative_state_leinster_cobbold_from_graph* iter_state = ((struct thread_args_aggregator*) args)->iter_state.leinster_cobbold;
+	const float* const vector = ((struct thread_args_aggregator*) args)->vector;
+	// uint64_t j = ((struct thread_args_aggregator*) args)->i + 1;
+	uint64_t j = 0;
+
+	const double u = 1.0;
+
+	double local_agg = 0.0;
+
+	const uint64_t n = (uint64_t) iter_state->g->num_nodes;
+	while(j < n){
+		double distance = (double) vector[j];
+		double similarity = 1.0 - distance;
+		local_agg += iter_state->g->nodes[j].relative_proportion * pow(E, -u * similarity);
+		j++;
+	}
+
+	pthread_mutex_lock(&(iter_state->mutex));
+	if(iter_state->alpha != 1.0){
+		iter_state->hill_number += pow(local_agg, iter_state->alpha - 1.0);
+	} else {
+		iter_state->hill_number *= pow(local_agg, iter_state->g->nodes[iter_state->i].relative_proportion);
+	}
+	pthread_mutex_unlock(&(iter_state->mutex));
+
+	return NULL;
+}
+
+void finalise_iterative_state_leinster_cobbold_from_graph(struct iterative_state_leinster_cobbold_from_graph* const restrict iter_state){
+	const double LOGARITHMIC_BASE = E;
+
+	if(iter_state->alpha != 1.0){
+		iter_state->hill_number = pow(iter_state->hill_number, 1.0 / (1.0 - iter_state->alpha));
+	} else {
+		iter_state->hill_number = pow(iter_state->hill_number, -1.0);
+	}
+
+	iter_state->entropy = log(iter_state->hill_number) / log(LOGARITHMIC_BASE);
+
+	pthread_mutex_destroy(&(iter_state->mutex));
 }
 
 // ================

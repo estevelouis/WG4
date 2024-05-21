@@ -471,9 +471,9 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 			else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000 && ((unsigned char) csi->bfr_read[i]) < 0b11110000){unicode_length = 3;}
 			else {unicode_length = 4;}
 			*/
-			if(((unsigned char) csi->bfr_read[i]) >= 0b11110000){unicode_length = 4;}
-			else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000){unicode_length = 3;}
-			else if(((unsigned char) csi->bfr_read[i]) >= 0b11000000){unicode_length = 2;}
+			if(((unsigned char) csi->bfr_read[i]) >= 240){unicode_length = 4;} // 0b11110000
+			else if(((unsigned char) csi->bfr_read[i]) >= 224){unicode_length = 3;} // 0b11100000
+			else if(((unsigned char) csi->bfr_read[i]) >= 196){unicode_length = 2;} // 0b11000000
 			else {unicode_length = 1;}
 
 			if(unicode_length == 1){

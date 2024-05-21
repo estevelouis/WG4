@@ -259,12 +259,12 @@ const int32_t NUM_CONLLU_COLUMNS_TO_ADD = 0;
 const int32_t CONLLU_ADD_FORM = 0;
 
 double stacked_sentence_count_log10 = SENTENCE_COUNT_RECOMPUTE_STEP_LOG10;
-uint64_t stacked_sentence_count_target;
+int64_t stacked_sentence_count_target;
 double stacked_document_count_log10 = DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10;
-uint64_t stacked_document_count_target;
+int64_t stacked_document_count_target;
 
 static int32_t time_ns_delta(int64_t* const delta){
-	static struct timespec static_ts = (struct timespec) {};
+	static struct timespec static_ts = {0};
 
 	struct timespec new_ts;
 
@@ -400,7 +400,7 @@ int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, cons
 }
 */
 
-int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database,
+int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spanning_tree* mst, struct graph_distance_heap* heap, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int64_t* previous_g_num_nodes_p, int64_t* num_sentences_p, int64_t* num_all_sentences_p, int64_t* num_documents_p, double* best_s, int8_t* mst_initialised, uint64_t i, struct sorted_array* sorted_array_discarded_because_not_in_vector_database,
 	char* w2v_path,
 // 	uint32_t target_column,
 	uint32_t num_row_threads,
@@ -486,14 +486,19 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 		if(used == NULL){goto malloc_fail;}
 		memset(used, '\0', local_malloc_size);
 
-		struct iterative_state_stirling_from_graph iter_state_stirling;
 		struct iterative_state_pairwise_from_graph iter_state_pairwise;
+		struct iterative_state_stirling_from_graph iter_state_stirling;
+		struct iterative_state_leinster_cobbold_from_graph iter_state_leinster_cobbold;
+		if(create_iterative_state_pairwise_from_graph(&iter_state_pairwise, g) != 0){
+			perror("failled to call create_iterative_state_pairwise_from_graph\n");
+			return 1;
+		}
 		if(create_iterative_state_stirling_from_graph(&iter_state_stirling, g, stirling_alpha, stirling_beta) != 0){
 			perror("failled to call create_iterative_state_stirling_from_graph\n");
 			return 1;
 		}
-		if(create_iterative_state_pairwise_from_graph(&iter_state_pairwise, g) != 0){
-			perror("failled to call create_iterative_state_pairwise_from_graph\n");
+		if(create_iterative_state_leinster_cobbold_from_graph(&iter_state_leinster_cobbold, g, leinster_cobbold_diversity_alpha) != 0){
+			perror("failled to call create_iterative_state_leinster_cobbold_from_graph\n");
 			return 1;
 		}
 
@@ -525,12 +530,14 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 			uint64_t actual_row_generation_batch_size = row_generation_batch_size;
 			if(h + row_generation_batch_size >= g->num_nodes){
+			// if(g->num_nodes - h < row_generation_batch_size){
 				actual_row_generation_batch_size = g->num_nodes - h;
 			}
 
-			pthread_t agg_threads[row_generation_batch_size]; // still have full buffer to make it writeable?
-			struct thread_args_aggregator agg_thread_args[row_generation_batch_size];
 			if(enable_pairwise){
+				pthread_t agg_threads[row_generation_batch_size]; // still have full buffer to make it writeable?
+				struct thread_args_aggregator agg_thread_args[row_generation_batch_size];
+				i_index = 0; // ?
 				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
 					struct thread_args_aggregator local_args = (struct thread_args_aggregator) {
 						.iter_state.pairwise = &iter_state_pairwise,
@@ -539,14 +546,79 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 					};
 					memcpy(&(agg_thread_args[m]), &local_args, sizeof(struct thread_args_aggregator));
 
+					#if ENABLE_AVX256 == 1
 					if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_pairwise_from_graph_avx_thread, &(agg_thread_args[m])) != 0){
+					#else
+					if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_pairwise_from_graph_thread, &(agg_thread_args[m])) != 0){
+					#endif
 						perror("Failed to call pthread_create\n");
 						return 1;
 					}
 
 					i_index = h + m + 1; // !
-					iter_state_stirling.i = i_index; // !
 					iter_state_pairwise.i = i_index; // !
+				}
+
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					pthread_join(agg_threads[m], NULL);
+				}
+			}
+			if(enable_stirling){
+				pthread_t agg_threads[row_generation_batch_size];
+				struct thread_args_aggregator agg_thread_args[row_generation_batch_size];
+				i_index = 0; // ?
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					struct thread_args_aggregator local_args = (struct thread_args_aggregator) {
+						.iter_state.stirling = &iter_state_stirling,
+						.i = i_index,
+						.vector = &(vector_batch[m * g->num_nodes]),
+					};
+					memcpy(&(agg_thread_args[m]), &local_args, sizeof(struct thread_args_aggregator));
+
+					#if ENABLE_AVX256 == 1
+					// if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_stirling_from_graph_avx_thread, &(agg_thread_args[m])) != 0){
+					perror("iterate_iterative_state_stirling_from_graph_avx_thread not implemented\n");
+					return 1;
+					#else
+					if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_stirling_from_graph_thread, &(agg_thread_args[m])) != 0){
+						perror("Failed to call pthread_create\n");
+						return 1;
+					}
+					#endif
+
+					i_index = h + m + 1; // !
+					iter_state_stirling.i = i_index; // !
+				}
+
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					pthread_join(agg_threads[m], NULL);
+				}
+			}
+			if(enable_leinster_cobbold_diversity){
+				pthread_t agg_threads[row_generation_batch_size];
+				struct thread_args_aggregator agg_thread_args[row_generation_batch_size];
+				i_index = 0; // ?
+				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
+					struct thread_args_aggregator local_args = (struct thread_args_aggregator) {
+						.iter_state.leinster_cobbold = &iter_state_leinster_cobbold,
+						.i = i_index,
+						.vector = &(vector_batch[m * g->num_nodes]),
+					};
+					memcpy(&(agg_thread_args[m]), &local_args, sizeof(struct thread_args_aggregator));
+
+					#if ENABLE_AVX256 == 1
+					// if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_leinster_cobbold_from_graph_avx_thread, &(agg_thread_args[m])) != 0){
+					perror("iterate_iterative_state_leinster_cobbold_from_graph_avx_thread not implemented\n");
+					return 1;
+					#else
+					if(pthread_create(&(agg_threads[m]), NULL, iterate_iterative_state_leinster_cobbold_from_graph_thread, &(agg_thread_args[m])) != 0){
+						perror("Failed to call pthread_create\n");
+						return 1;
+					}
+					#endif
+
+					i_index = h + m + 1; // !
+					iter_state_leinster_cobbold.i = i_index; // !
 				}
 
 				for(uint64_t m = 0 ; m < actual_row_generation_batch_size ; m++){
@@ -558,28 +630,28 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 		free(used);
 
 
-		// finalise_iterative_state_stirling_from_graph(&iter_state_stirling);
 		finalise_iterative_state_pairwise_from_graph(&iter_state_pairwise);
+		finalise_iterative_state_stirling_from_graph(&iter_state_stirling);
+		finalise_iterative_state_leinster_cobbold_from_graph(&iter_state_leinster_cobbold);
 
 		double mu_dist = sum / ((double) (g->num_nodes * (g->num_nodes - 1) / 2));
 
-		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, '?'); // recomputing sigma dist would be expensive
+		fprintf(f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, '?'); // recomputing sigma dist would be expensive
 
-		if(enable_stirling){printf("[log] [end iter] stirling: %f\n", iter_state_stirling.result);}
-		fprintf(f_ptr, "\t%.10e", iter_state_stirling.result);
-		if(enable_pairwise){printf("[log] [end iter] pairwise: %f\n", iter_state_pairwise.result);}
-		fprintf(f_ptr, "\t%.10e", iter_state_pairwise.result);
+		if(enable_pairwise){printf("[log] [end iter] pairwise: %f\n", iter_state_pairwise.result); fprintf(f_ptr, "\t%.10e", iter_state_pairwise.result);}
+		if(enable_stirling){printf("[log] [end iter] stirling: %f\n", iter_state_stirling.result); fprintf(f_ptr, "\t%.10e", iter_state_stirling.result);}
+		if(enable_leinster_cobbold_diversity){printf("[log] [end iter] leinster_cobbold: %f, %f\n", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number); fprintf(f_ptr, "\t%.10e\t%.10e", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number);}
 
 		fprintf(f_ptr, "\n");
 	} else {
 		int64_t ns_delta, virtual_mem;
 
 		if(enable_output_timing){
-			fprintf(f_timing_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+			fprintf(f_timing_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
 			if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}
 		}
 		if(enable_output_memory){
-			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
+			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
 		}
 
 		struct matrix m_mst;
@@ -636,7 +708,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 		double sigma_dist = NAN;
 		float mu_dist_fp32 = NAN;
 		float sigma_dist_fp32 = NAN;
-		if(enable_functional_evenness){
+		if(enable_distance_computation && enable_functional_evenness){
 			err = create_graph_distance_heap(&local_heap, g, GRAPH_NODE_FP32, &m);
 			if(err != 0){
 				perror("failed to call create_graph_distance_heap\n");
@@ -667,7 +739,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 			if(enable_output_memory){if(virtual_memory_consumption(&virtual_mem) != 0){goto virtual_memory_consumption_failure;} else {fprintf(f_memory_ptr, "\t%li", virtual_mem);}}
 		}
 
-		fprintf(f_ptr, "%lu\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
+		fprintf(f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, sigma_dist);
 
 		if(enable_disparity_functions){
 			if(enable_output_timing){if(time_ns_delta(NULL) != 0){goto time_ns_delta_failure;}}
@@ -1215,7 +1287,7 @@ int32_t measurement(
 
 	FILE* f_ptr = fopen(output_path, "w");
 	if(f_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", output_path); return EXIT_FAILURE;}
-	fprintf(f_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+	fprintf(f_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
 
 	if(enable_disparity_functions){
 		if(enable_stirling){fprintf(f_ptr, "\tstirling_alpha%.10e_beta%.10e", stirling_alpha, stirling_beta);}
@@ -1223,7 +1295,7 @@ int32_t measurement(
 		if(enable_pairwise){fprintf(f_ptr, "\tpairwise");}
 		if(!enable_iterative_distance_computation && enable_chao_et_al_functional_diversity){fprintf(f_ptr, "\tchao_et_al_functional_diversity_alpha%.10e\tchao_et_al_functional_hill_number_alpha%.10e", chao_et_al_functional_diversity_alpha, chao_et_al_functional_diversity_alpha);}
 		if(!enable_iterative_distance_computation && enable_scheiner_species_phylogenetic_functional_diversity){fprintf(f_ptr, "\tscheiner_species_phylogenetic_functional_diversity_alpha%.10e\tscheiner_species_phylogenetic_functional_hill_number_alpha%.10e", scheiner_species_phylogenetic_functional_diversity_alpha, scheiner_species_phylogenetic_functional_diversity_alpha);}
-		if(!enable_iterative_distance_computation && enable_leinster_cobbold_diversity){fprintf(f_ptr, "\tleinster_cobbold_diversity_alpha%.10e\tleinster_cobbold_hill_number_alpha%.10e", leinster_cobbold_diversity_alpha, leinster_cobbold_diversity_alpha);}
+		if(enable_leinster_cobbold_diversity){fprintf(f_ptr, "\tleinster_cobbold_diversity_alpha%.10e\tleinster_cobbold_hill_number_alpha%.10e", leinster_cobbold_diversity_alpha, leinster_cobbold_diversity_alpha);}
 		if(!enable_iterative_distance_computation && enable_lexicographic){fprintf(f_ptr, "\tlexicographic\tlexicographic_hybrid_scheiner");}
 		if(!enable_iterative_distance_computation && enable_functional_evenness){fprintf(f_ptr, "\tfunctional_evenness");}
 		if(!enable_iterative_distance_computation && enable_functional_dispersion){fprintf(f_ptr, "\tfunctional_dispersion");}
@@ -1262,8 +1334,8 @@ int32_t measurement(
 	if(enable_output_timing){
 		f_timing_ptr = fopen(output_path_timing, "w");
 		if(f_timing_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", output_path_timing); return EXIT_FAILURE;}
-		// fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
-		fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn");
+		// fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+		fprintf(f_timing_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn");
 
 		if(enable_disparity_functions){
 			// ----
@@ -1319,8 +1391,8 @@ int32_t measurement(
 	if(enable_output_memory){
 		f_memory_ptr = fopen(output_path_memory, "w");
 		if(f_memory_ptr == NULL){fprintf(stderr, "Failed to open file: %s\n", output_path_memory); return EXIT_FAILURE;}
-		// fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
-		fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tw2v\tnum_discarded_types\ts\tn");
+		// fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+		fprintf(f_memory_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn");
 
 		if(enable_disparity_functions){
 			// ----
@@ -1376,15 +1448,15 @@ int32_t measurement(
 	int32_t num_nodes = 0;
 	int64_t num_sentences = 0;
 	int64_t max_num_sentences = 10000;
-	int8_t use_max_num_sentences = 0;
+	const int8_t use_max_num_sentences = 0;
 
-	uint64_t num_documents = 0;
-	uint64_t max_num_documents = 10000;
-	uint8_t use_max_num_documents = 0;
+	int64_t num_documents = 0;
+	int64_t max_num_documents = 10000;
+	const uint8_t use_max_num_documents = 0;
 
 	int64_t num_all_sentences = 0; // even ignored sentences
 	int64_t max_num_all_sentences = 50000;
-	int8_t use_max_num_all_sentences = 0;
+	const int8_t use_max_num_all_sentences = 0;
 
 	int64_t previous_g_num_nodes = -1;
 
@@ -1740,7 +1812,7 @@ int32_t measurement(
 				}	
 
 				// sentence level recomputation
-				if((target_column != UD_MWE || found_at_least_one_mwe) && (enable_sentence_count_recompute_step && (((!sentence_recompute_step_use_log10) && num_sentences % sentence_count_recompute_step == 0) || (sentence_recompute_step_use_log10 && ((uint64_t) num_sentences) >= stacked_sentence_count_target))) && g.num_nodes > 1){
+				if((target_column != UD_MWE || found_at_least_one_mwe) && (enable_sentence_count_recompute_step && (((!sentence_recompute_step_use_log10) && num_sentences % sentence_count_recompute_step == 0) || (sentence_recompute_step_use_log10 &&  num_sentences >= stacked_sentence_count_target))) && g.num_nodes > 1){
 					printf("found_at_least_one_mwe: %i; g.num_nodes: %lu\n", found_at_least_one_mwe, g.num_nodes);
 					double absolute_proportion_sum = 0.0;
 					for(uint64_t p = 0 ; p < g.num_nodes ; p++){
@@ -1759,7 +1831,7 @@ int32_t measurement(
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
 	num_row_threads,
@@ -1890,7 +1962,7 @@ int32_t measurement(
 			
 				if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 					printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
 	num_row_threads,
@@ -2003,6 +2075,8 @@ int32_t measurement(
 					int32_t index = word2vec_key_to_index(w2v, jdi.current_document.current_token);
 					if(index != -1){
 						if(w2v->keys[index].active_in_current_graph == 0){
+							// printf("adding a new token: %s\n", jdi.current_document.current_token);
+
 							w2v->keys[index].active_in_current_graph = 1;
 							num_nodes++;
 
@@ -2051,7 +2125,7 @@ int32_t measurement(
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
 						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
-						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
+						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
 	num_row_threads,
@@ -2462,8 +2536,12 @@ int32_t main(int32_t argc, char** argv){
 	printf("hill_evenness_alpha: %f\n", argv_hill_evenness_alpha);
 	printf("hill_evenness_beta: %f\n", argv_hill_evenness_beta);
 
+
+	#if TOKENIZATION_METHOD == 2
 	ensure_proper_udpipe_pipeline_size();
+	#elif TOKENIZATION_METHOD == 1
 	jsonl_init_tokenization();
+	#endif
 
 	int32_t err;
 
@@ -2481,7 +2559,7 @@ int32_t main(int32_t argc, char** argv){
 	#if TOKENIZATION_METHOD == 2
 	// udpipe_pipeline_create_global("/home/esteve/Documents/thesis/other_repos/udpipe/sandbox_models/english-ewt-ud-2.5-191206.udpipe", "tokenizer", "none", "none", "vertical"); // unsure about "none" for parser
 	udpipe_pipeline_create_global(argv_udpipe_model_path, "tokenizer", "none", "none", "vertical"); // unsure about "none" for parser
-	udpipe_pipeline_print_global_info();
+	// udpipe_pipeline_print_global_info();
 	#endif
 
 	err = measurement(

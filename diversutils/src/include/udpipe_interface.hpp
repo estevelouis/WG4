@@ -11,10 +11,12 @@
 #include "udpipe.h"
 #include "udpipe_interface/size.h"
 
+/*
 std::string& ufal::udpipe::pipeline::get_input(){return input;}
 std::string& ufal::udpipe::pipeline::get_tagger(){return tagger;}
 std::string& ufal::udpipe::pipeline::get_parser(){return parser;}
 std::string& ufal::udpipe::pipeline::get_output(){return output;}
+*/
 
 static ufal::udpipe::pipeline* global_pipeline;
 
@@ -58,6 +60,7 @@ extern "C" void udpipe_pipeline_create_global(const char* model_name, const char
 	global_pipeline = std::addressof(local_pipeline);
 }
 
+/*
 extern "C" void udpipe_pipeline_print_global_info(){
 	std::cout << "udpipe_pipeline_print_global_info:" << std::endl;
 	std::cout << "get input:" << global_pipeline->get_input() << std::endl;
@@ -65,6 +68,7 @@ extern "C" void udpipe_pipeline_print_global_info(){
 	std::cout << "get parser:" << global_pipeline->get_parser() << std::endl;
 	std::cout << "get output:" << global_pipeline->get_output() << std::endl;
 }
+*/
 
 extern "C" void udpipe_pipeline_process(const char* raw_txt, FILE** const pointer_file, void** const pointer_heap_char){
 	std::string raw_txt_to_string(raw_txt);

@@ -58,8 +58,10 @@ enum {
 #include "jsonl/constants.h"
 #include "sorted_array/array.h"
 #include "sanitize.h"
+#if (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
 #include "udpipe_interface/cinterface.h" // external declarations
 #include "udpipe_interface/conversion.h" // transformation to pipes
+#endif
 
 /*
 extern "C++" {
@@ -141,9 +143,8 @@ struct document {
 	char* text;
 };
 
-// int32_t launch_udpipe(struct document* const doc, struct udpipe_pipeline* const local_pipeline){
+#if (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
 int32_t launch_udpipe(struct document* const doc){
-	// (void*) doc; // to avoid warning in the event we select regex tokenization
 	#if TOKENIZATION_METHOD == 1
 	const char* model_name = "english-ewt-ud-2.5-191206.udpipe";
 	// const char* model_name = "french-sequoia-ud-2.5-191206.udpipe";
@@ -182,6 +183,7 @@ int32_t launch_udpipe(struct document* const doc){
 	#endif
 	return 0;
 }
+#endif
 
 int32_t create_document(struct document* doc){
 	#if TOKENIZATION_METHOD == 1
@@ -606,11 +608,12 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 		jdi->file_is_done = 1;
 	}
 
-	// if(TOKENIZATION_METHOD == 1 && launch_udpipe(&(jdi->current_document), local_pipeline) != 0){
-	if(TOKENIZATION_METHOD == 1 && launch_udpipe(&(jdi->current_document)) != 0){
+	#if TOKENIZATION_METHOD == 1
+	if(launch_udpipe(&(jdi->current_document)) != 0){
 		perror("Failed to call launch_udpipe\n");
 		return 1;
 	}
+	#endif
 
 	return 0;
 
