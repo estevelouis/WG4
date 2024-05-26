@@ -192,12 +192,12 @@ int32_t create_sentence(struct sentence* s, char* sentence_id){
 	return 0;
 }
 
-int32_t recreate_sentence(struct sentence* s, char* sentence_id){
+int32_t recreate_sentence(struct sentence* const s, const char* const sentence_id){
 	memset(s->sentence_id, '\0', SENTENCE_SENT_ID_SIZE);
 
 	strncpy(s->sentence_id, sentence_id, SENTENCE_SENT_ID_SIZE - 1);
 
-	size_t malloc_size = SENTENCE_TOKEN_CAPACITY_STEP * sizeof(struct token);
+	const size_t malloc_size = SENTENCE_TOKEN_CAPACITY_STEP * sizeof(struct token);
 	if(s->tokens == NULL){
 		printf("s->tokens == NULL\n");
 		printf("s->sentence_id: %s\n", s->sentence_id);
@@ -222,10 +222,12 @@ int32_t recreate_sentence(struct sentence* s, char* sentence_id){
 	s->capacity = SENTENCE_TOKEN_CAPACITY_STEP;
 	s->num_tokens = 0;
 
+	/*
 	if(s->tokens == NULL){
 		printf("(recreate_sentence) s->tokens == NULL\n");
 		exit(1);
 	}
+	*/
 
 	return 0;
 }
@@ -332,6 +334,7 @@ int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator* const csi, 
 }
 
 void free_cupt_sentence_iterator(struct cupt_sentence_iterator* csi){
+	free_sentence(&(csi->current_sentence));
 	fclose(csi->file_ptr);
 }
 

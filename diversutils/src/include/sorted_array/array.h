@@ -173,15 +173,15 @@ void free_sorted_array(struct sorted_array* array){
 	}
 }
 
-int32_t key_to_index_sorted_array(struct sorted_array* array, void* key){
+int32_t key_to_index_sorted_array(const struct sorted_array* const array, const void* const key){
 	if(array->num_elements == 0){
 		return -1;
 	}
 	int32_t lower_bound = 0;
-	int32_t upper_bound = array->num_elements;
+	int32_t upper_bound = array->num_elements - 1;
 
 	while(lower_bound <= upper_bound){
-		int32_t middle_index = lower_bound + floor((upper_bound - lower_bound) / 2);
+		int32_t middle_index = lower_bound + ((upper_bound - lower_bound) >> 1);
 		int32_t cmp_result = array->comp((void*) (((uint64_t) array->bfr) + (middle_index * array->element_size)), key); // compliance
 		if(cmp_result == 0){
 			return middle_index;
@@ -195,7 +195,7 @@ int32_t key_to_index_sorted_array(struct sorted_array* array, void* key){
 	return -1;
 }
 
-void* key_to_elem_sorted_array(struct sorted_array* array, void* key){
+void* key_to_elem_sorted_array(const struct sorted_array* const array, const void* const key){
 	int32_t index = key_to_index_sorted_array(array, key);
 	return ((void*) (((uint64_t) array->bfr) + (index * array->element_size))); // compliance
 }

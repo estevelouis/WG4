@@ -35,6 +35,7 @@
 #include "stats.h"
 #include "dfunctions.h"
 #include "sorted_array/array.h"
+#include "logging.h"
 
 #include "jsonl/parser.h"
 
@@ -328,10 +329,15 @@ void timing_and_memory(FILE* f_timing_ptr, FILE* f_memory_ptr, const uint8_t ena
 int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, const int8_t, const struct matrix* const), const uint8_t enable_timings, const uint8_t enable_output_timing, const uint8_t enable_output_memory){
 	double res1;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e", res1);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -340,10 +346,15 @@ int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, cons
 int32_t wrap_diversity_1r_0a_no_matrix(struct graph* const g, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, const int8_t), const uint8_t enable_timings, const uint8_t enable_output_timing, const uint8_t enable_output_memory){
 	double res1;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, fp_mode) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e", res1);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -352,10 +363,15 @@ int32_t wrap_diversity_1r_0a_no_matrix(struct graph* const g, const int8_t fp_mo
 int32_t wrap_diversity_2r_1a(struct graph* const g, struct matrix* const m, const double alpha, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, double* const, double, const int8_t, const struct matrix* const), const uint8_t enable_timings, const uint8_t enable_output_timing, const uint8_t enable_output_memory){
 	double res1, res2;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, &res2, alpha, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_1a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e\t%.10e", res1, res2);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -364,10 +380,15 @@ int32_t wrap_diversity_2r_1a(struct graph* const g, struct matrix* const m, cons
 int32_t wrap_diversity_2r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double* const, double* const, const int8_t, const struct matrix* const), const uint8_t enable_timings, const uint8_t enable_output_timing, const uint8_t enable_output_memory){
 	double res1, res2;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, &res2, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_0a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e\t%.10e", res1, res2);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -377,10 +398,15 @@ int32_t wrap_diversity_2r_0a_long_double_alt(struct graph* const g, struct matri
 	double res1;
 	long double res2;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, &res2, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_2r_0a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e\t%.10Le", res1, res2);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -390,10 +416,15 @@ int32_t wrap_diversity_2r_0a_long_double_alt(struct graph* const g, struct matri
 int32_t wrap_diversity_1r_0a(struct graph* const g, struct matrix* const m, const int8_t fp_mode, FILE* f_ptr, FILE* f_timing_ptr, FILE* f_memory_ptr, int32_t (*df)(struct graph* const, double*, const int8_t, struct matrix* const), const uint8_t enable_timings, const uint8_t enable_output_timing, const uint8_t enable_output_memory){
 	double res1;
 	time_t t, delta_t;
+	const int32_t bfr_size = 64;
+	char bfr[bfr_size];
 	t = time(NULL);
 	if(df(g, &res1, fp_mode, m) != 0){perror("Failed to call diversity function in wrap_diversity_1r_0a\n"); return EXIT_FAILURE;}
 	delta_t = time(NULL) - t;
-	if(ENABLE_TIMINGS){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	// if(enable_timings){printf("[log] [time] Computed df in %lis\n", delta_t);}
+	memset(bfr, '\0', bfr_size * sizeof(char));
+	snprintf(bfr, bfr_size, "Computed df in %lis", delta_t);
+	if(enable_timings){info_format(__FILE__, __func__, __LINE__, bfr);}
 	fprintf(f_ptr, "\t%.10e", res1);
 	timing_and_memory(f_timing_ptr, f_memory_ptr, enable_output_timing, enable_output_memory);
 	return 0;
@@ -638,9 +669,18 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 		fprintf(f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes, mu_dist, '?'); // recomputing sigma dist would be expensive
 
+		/*
 		if(enable_pairwise){printf("[log] [end iter] pairwise: %f\n", iter_state_pairwise.result); fprintf(f_ptr, "\t%.10e", iter_state_pairwise.result);}
 		if(enable_stirling){printf("[log] [end iter] stirling: %f\n", iter_state_stirling.result); fprintf(f_ptr, "\t%.10e", iter_state_stirling.result);}
 		if(enable_leinster_cobbold_diversity){printf("[log] [end iter] leinster_cobbold: %f, %f\n", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number); fprintf(f_ptr, "\t%.10e\t%.10e", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number);}
+		*/
+
+		const int32_t log_bfr_size = 128;
+		char log_bfr[log_bfr_size];
+
+		if(enable_pairwise){memset(log_bfr, '\0', log_bfr_size); snprintf(log_bfr, log_bfr_size, "[end iter] pairwise: %f", iter_state_pairwise.result); info_format(__FILE__, __func__, __LINE__, log_bfr); fprintf(f_ptr, "\t%.10e", iter_state_pairwise.result);}
+		if(enable_stirling){memset(log_bfr, '\0', log_bfr_size); snprintf(log_bfr, log_bfr_size, "[end iter] stirling: %f", iter_state_stirling.result); info_format(__FILE__, __func__, __LINE__, log_bfr); fprintf(f_ptr, "\t%.10e", iter_state_stirling.result);}
+		if(enable_leinster_cobbold_diversity){memset(log_bfr, '\0', log_bfr_size); snprintf(log_bfr, log_bfr_size, "[end iter] leinster_cobbold: %f, %f", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number); info_format(__FILE__, __func__, __LINE__, log_bfr); fprintf(f_ptr, "\t%.10e\t%.10e", iter_state_leinster_cobbold.entropy, iter_state_leinster_cobbold.hill_number);}
 
 		fprintf(f_ptr, "\n");
 	} else {
@@ -654,7 +694,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 			fprintf(f_memory_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, (*num_sentences_p), (*num_all_sentences_p), (*num_documents_p), w2v_path, sorted_array_discarded_because_not_in_vector_database->num_elements, (*best_s), g->num_nodes);
 		}
 
-		struct matrix m_mst;
+		struct matrix m_mst = { .fp_mode = FP64, };
 		if(enable_functional_evenness){
 			if(create_matrix(&m_mst, g->num_nodes, g->num_nodes, FP64) != 0){
 				perror("failed to call create_matrix for MST\n");
@@ -668,7 +708,7 @@ int32_t apply_diversity_functions_to_graph(struct graph* g, struct minimum_spann
 
 		time_t t, delta_t;
 
-		struct matrix m;
+		struct matrix m = { .fp_mode = FP32, };
 		if(enable_distance_computation){
 			if(create_matrix(&m, (uint32_t) g->num_nodes, (uint32_t) g->num_nodes, FP32) != 0){
 				perror("failed to call create_matrix\n");
@@ -1219,6 +1259,9 @@ int32_t measurement(
 	double hill_evenness_alpha,
 	double hill_evenness_beta
 ){
+	const int32_t log_bfr_size = 512;
+	char log_bfr[512];
+
 	const uint8_t enable_distance_computation = enable_disparity_functions && (enable_stirling || enable_ricotta_szeidl || enable_pairwise || enable_chao_et_al_functional_diversity || enable_scheiner_species_phylogenetic_functional_diversity || enable_leinster_cobbold_diversity || enable_lexicographic || enable_functional_evenness || enable_functional_dispersion || enable_functional_divergence_modified);
 
 	stacked_sentence_count_target = log(stacked_sentence_count_log10) / log(10.0);
@@ -1230,7 +1273,7 @@ int32_t measurement(
 		return 1;
 	}
 
-	struct graph g;
+	struct graph g = {0};
 	if(create_graph_empty(&g) != 0){
 		perror("failed to call create_graph_empty\n");
 		return 1;
@@ -1281,6 +1324,9 @@ int32_t measurement(
 
 		num_files++;
 	}
+
+	fclose(f_paths_ptr);
+
 	int32_t num_input_paths = num_files;
 	char** input_paths = bfr;
 	char** input_paths_true_positives = NULL;
@@ -1483,7 +1529,11 @@ int32_t measurement(
 		int32_t current_file_format = 0;
 		if(strcmp(&(input_paths[i][input_path_len - 5]), ".cupt") == 0){
 			current_file_format = CUPT;
-			printf("CUPT: %s\n", input_paths[i]);
+			// printf("CUPT: %s\n", input_paths[i]);
+			memset(log_bfr, '\0', log_bfr_size * sizeof(char));
+			snprintf(log_bfr, log_bfr_size, "CUPT: %s", input_paths[i]);
+			info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 			int32_t err = create_cupt_sentence_iterator(&csi, input_paths[i]);
 			if(err != 0){
 				perror("failed to call create_cupt_sentence_iterator\n");
@@ -1517,7 +1567,11 @@ int32_t measurement(
 			}
 		} else if(strcmp(&(input_paths[i][input_path_len - 6]), ".jsonl") == 0){
 			current_file_format = JSONL;
-			printf("JSONL: %s\n", input_paths[i]);
+			// printf("JSONL: %s\n", input_paths[i]);
+			memset(log_bfr, '\0', log_bfr_size * sizeof(char));
+			snprintf(log_bfr, log_bfr_size, "JSONL: %s", input_paths[i]);
+			info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 			if(create_jsonl_document_iterator(&jdi, input_paths[i], jsonl_content_key) != 0){
 				perror("failed to call create_jsonl_document_iterator\n");
 				return 1;
@@ -1584,8 +1638,6 @@ int32_t measurement(
 					if(NUM_CONLLU_COLUMNS_TO_ADD == 0){
 						switch(target_column){
 							case UD_FORM:
-								index = word2vec_key_to_index(w2v, csi.current_sentence.tokens[j].form);
-								index_in_discarded = key_to_index_sorted_array(&sorted_array_discarded_because_not_in_vector_database, csi.current_sentence.tokens[j].form);
 								len = strlen(csi.current_sentence.tokens[j].form);
 								if(len > key_size - 1){
 									len = key_size - 1;
@@ -1593,8 +1645,6 @@ int32_t measurement(
 								memcpy(key, csi.current_sentence.tokens[j].form, len);
 								break;
 							case UD_LEMMA:
-								index = word2vec_key_to_index(w2v, csi.current_sentence.tokens[j].lemma);
-								index_in_discarded = key_to_index_sorted_array(&sorted_array_discarded_because_not_in_vector_database, csi.current_sentence.tokens[j].lemma);
 								len = strlen(csi.current_sentence.tokens[j].lemma);
 								if(len > key_size - 1){
 									len = key_size - 1;
@@ -1604,7 +1654,7 @@ int32_t measurement(
 							default:
 								index = -1;
 								perror("target_column not properly defined\n");
-								break;
+								return 1;
 						}
 					} else {
 						const int32_t max_size_alt_key = 256;
@@ -1656,10 +1706,10 @@ int32_t measurement(
 							bytes_to_cpy = key_size - 1;
 						}
 						memcpy(key, key_alt, bytes_to_cpy);
-	
-						index = word2vec_key_to_index(w2v, key);
-						index_in_discarded = key_to_index_sorted_array(&sorted_array_discarded_because_not_in_vector_database, key);
 					}
+	
+					index = word2vec_key_to_index(w2v, key);
+					index_in_discarded = key_to_index_sorted_array(&sorted_array_discarded_because_not_in_vector_database, key);
 	
 					if(index != -1){
 						if(w2v->keys[index].active_in_current_graph == 0){
@@ -1830,7 +1880,11 @@ int32_t measurement(
 					}
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
-						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+						// printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+						memset(log_bfr, '\0', log_bfr_size);
+						snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", best_s, g.num_nodes, num_sentences, num_documents);
+						info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
@@ -1961,7 +2015,11 @@ int32_t measurement(
 				}
 			
 				if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
-					printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+					//printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+					memset(log_bfr, '\0', log_bfr_size);
+					snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", best_s, g.num_nodes, num_sentences, num_documents);
+					info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 					err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
@@ -2046,7 +2104,10 @@ int32_t measurement(
 				if(document_recompute_step_use_log10){
 					stacked_document_count_log10 += document_count_recompute_step_log10;
 					stacked_document_count_target = (uint64_t) floor(pow(10.0, stacked_document_count_log10));
-					printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
+					// printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
+					memset(log_bfr, '\0', log_bfr_size);
+					snprintf(log_bfr, log_bfr_size, "New document count target: %lu (10.0^%.3f)", stacked_document_count_target, stacked_document_count_log10);
+					info_format(__FILE__, __func__, __LINE__, log_bfr);
 				}
 			}
 		} else if(current_file_format == JSONL){
@@ -2124,7 +2185,11 @@ int32_t measurement(
 					}
 				
 					if(best_s != previous_best_s || g.num_nodes != ((uint64_t) previous_g_num_nodes)){
-						printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+						// printf("best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li\n", best_s, g.num_nodes, num_sentences, num_documents);
+						memset(log_bfr, '\0', log_bfr_size);
+						snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", best_s, g.num_nodes, num_sentences, num_documents);
+						info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 						err = apply_diversity_functions_to_graph(&g, &mst, &heap, f_ptr, f_timing_ptr, f_memory_ptr, &previous_g_num_nodes, &num_sentences, &num_all_sentences, &num_documents, &best_s, &mst_initialised, i, &sorted_array_discarded_because_not_in_vector_database,
 	w2v_path,
 	// target_column,
@@ -2209,7 +2274,10 @@ int32_t measurement(
 					if(document_recompute_step_use_log10){
 						stacked_document_count_log10 += document_count_recompute_step_log10;
 						stacked_document_count_target = (uint64_t) floor(pow(10.0, stacked_document_count_log10));
-						printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
+						// printf("New document count target: %lu (10.0^%.3f)\n", stacked_document_count_target, stacked_document_count_log10);
+						memset(log_bfr, '\0', log_bfr_size);
+						snprintf(log_bfr, log_bfr_size, "New document count target: %lu (10.0^%.3f)", stacked_document_count_target, stacked_document_count_log10);
+						info_format(__FILE__, __func__, __LINE__, log_bfr);
 					}
 				}
 
@@ -2247,6 +2315,11 @@ int32_t measurement(
 	for(int32_t i = 0 ; i < num_files ; i++){
 		free(bfr[i]);
 	}
+
+	fclose(f_ptr);
+	if(f_timing_ptr != NULL){fclose(f_timing_ptr);}
+	if(f_memory_ptr != NULL){fclose(f_memory_ptr);}
+
 	return 1;
 }
 

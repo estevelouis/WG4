@@ -41,6 +41,7 @@
 #include "distances.h"
 #include "cupt/parser.h"
 #include "stats.h"
+#include "logging.h"
 
 #ifndef ENABLE_AVX256
 #define ENABLE_AVX256 0
@@ -110,7 +111,7 @@ struct matrix {
 	uint8_t fp_mode;
 	uint8_t* active;
 	uint8_t* active_final;
-	uint8_t to_free;
+	// uint8_t to_free;
 };
 
 #define GRAPH_CAPACITY_STEP 64
@@ -123,10 +124,15 @@ struct graph {
 	int16_t num_dimensions;
 	// float* dist_mat;
 	struct matrix dist_mat;
+	uint8_t dist_mat_must_be_freed;
 };
 
-int32_t create_matrix(struct matrix* m, uint32_t a, uint32_t b, int8_t fp_mode){
-	// printf("create_matrix: %u %u\n", a, b);
+int32_t create_matrix(struct matrix* const m, const uint32_t a, const uint32_t b, const int8_t fp_mode){
+	if(!(fp_mode == FP32 || fp_mode == FP64)){
+		perror("Unknown fp_mode in create_matrix\n");
+		return 1;
+	}
+
 	m->a = a;
 	m->b = b;
 	size_t malloc_size = ((size_t) a) * ((size_t) b);
@@ -137,12 +143,9 @@ int32_t create_matrix(struct matrix* m, uint32_t a, uint32_t b, int8_t fp_mode){
 		case FP64:
 			malloc_size *= sizeof(double);
 			break;
-		default:
-			return 1;
 	}
 
 	void* malloc_pointer;
-
 
 	malloc_pointer = malloc(malloc_size);
 	if(malloc_pointer == NULL){goto malloc_failure;}
@@ -189,7 +192,7 @@ int32_t create_matrix(struct matrix* m, uint32_t a, uint32_t b, int8_t fp_mode){
 
 	m->fp_mode = fp_mode;
 
-	m->to_free = 1;
+	// m->to_free = 1;
 
 	return 0;
 
@@ -461,7 +464,8 @@ int32_t distance_matrix_from_graph_multithread(struct graph* const g, struct mat
 }
 
 void free_matrix(struct matrix* m){
-	if(m->to_free == 0){return;}
+	// if(m->to_free == 0){return;}
+	/*
 	switch(m->fp_mode){
 		case FP32:
 			free(m->bfr.fp32);
@@ -469,11 +473,17 @@ void free_matrix(struct matrix* m){
 		case FP64:
 			free(m->bfr.fp64);
 			break;
+		default:
+			perror("Unknown m->fp_mode in free_matrix\n");
+			exit(1);
 	}
+	*/
+	free((void*) m->bfr.fp32);
 	free(m->active);
 	free(m->active_final);
-	m->to_free = 0;
+	// m->to_free = 0;
 }
+
 int32_t stats_matrix(struct matrix* m, double* avg_p, double* std_p, double* min_p, double* max_p){
 	double sum = 0.0;
 	double min;
@@ -672,7 +682,7 @@ void free_graph_node(struct graph_node* restrict node, const int8_t fp_mode){
 }
 
 
-int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const int16_t num_dimensions, const int8_t fp_mode){
+int32_t create_graph(struct graph* restrict const g, const int32_t num_nodes, const int16_t num_dimensions, const int8_t fp_mode){
 	size_t malloc_size = num_nodes * sizeof(struct graph_node);
 	void* malloc_pointer = malloc(malloc_size);
 	if(malloc_pointer == NULL){goto malloc_fail;}
@@ -681,16 +691,9 @@ int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const in
 	g->num_nodes = num_nodes;
 	g->capacity = num_nodes;
 	g->num_dimensions = num_dimensions;
-	// g->dist_mat = NULL;
-	/*
-	if(create_matrix(&(g->dist_mat), (uint32_t) g->num_nodes, (uint32_t) g->num_nodes, fp_mode) != 0){
-		perror("failed to call create_matrix\n");
-		free(g->nodes);
-		g->nodes = NULL;
-		return 1;
-	}
-	*/
-	g->dist_mat.to_free = 0;
+	// g->dist_mat.to_free = 0;
+	g->dist_mat = (struct matrix) { .fp_mode = fp_mode, };
+	g->dist_mat_must_be_freed = 0;
 	pthread_mutex_init(&g->mutex_nodes, NULL);
 
 	double relative_proportion_sum = 0.0;
@@ -723,14 +726,14 @@ int32_t create_graph(struct graph* restrict g, const int32_t num_nodes, const in
 
 	create_graph_node_failed:
 	perror("create_graph_node failed\n");
-	free((*g).nodes);
+	free(g->nodes);
 	goto return_failure;
 
 	return_failure:
 	return 1;
 }
 
-int32_t request_more_capacity_graph(struct graph* restrict g){
+int32_t request_more_capacity_graph(struct graph* restrict const g){
 	void* malloc_pointer = realloc(g->nodes, (g->capacity + GRAPH_CAPACITY_STEP) * sizeof(struct graph_node));
 	if(malloc_pointer == NULL){
 		perror("failed to realloc\n");
@@ -742,10 +745,12 @@ int32_t request_more_capacity_graph(struct graph* restrict g){
 	return 0;
 }
 
-int32_t create_graph_empty(struct graph* restrict g){
+int32_t create_graph_empty(struct graph* restrict const g){
 	g->nodes = NULL;
 	g->num_nodes = 0;
 	g->capacity = 0;
+	g->dist_mat = (struct matrix) { .fp_mode = FP32, };
+	g->dist_mat_must_be_freed = 0;
 
 	if(request_more_capacity_graph(g) != 0){
 		return 1;
@@ -789,6 +794,9 @@ int32_t compute_graph_dist_mat(struct graph* const g, const int16_t num_matrix_t
 		perror("failed to call distance_matrix_from_graph\n");
 		return 1;
 	}
+
+	g->dist_mat_must_be_freed = 1;
+
 	return 0;
 }
 
@@ -813,7 +821,13 @@ struct word2vec {
 };
 
 int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict path){
-	printf("Creating graph from word2vec binary %s\n", path);
+	const int32_t log_bfr_size = 256;
+	char log_bfr[log_bfr_size];
+	// printf("Creating graph from word2vec binary %s\n", path);
+	memset(log_bfr, '\0', log_bfr_size * sizeof(char));
+	snprintf(log_bfr, log_bfr_size, "Creating graph from word2vec binary: %s", path);
+	info_format(__FILE__, __func__, __LINE__, log_bfr);
+
 	FILE* file_p;
 	file_p = fopen(path, "r");
 	if(file_p == NULL){
@@ -843,7 +857,10 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 	}
 	int16_t num_dimensions = (int16_t) strtol(start_num_dimensions, &end_num_dimensions, 10);
 
-	printf("number of nodes: %li\nnumber of dimensions: %i\n", num_vectors, num_dimensions);
+	// printf("number of nodes: %li\nnumber of dimensions: %i\n", num_vectors, num_dimensions);
+	memset(log_bfr, '\0', log_bfr_size * sizeof(char));
+	snprintf(log_bfr, log_bfr_size, "Number of nodes: %li; number of dimensions: %i", num_vectors, num_dimensions);
+	info_format(__FILE__, __func__, __LINE__, log_bfr);
 
 	w2v->num_dimensions = num_dimensions;
 	w2v->num_vectors = num_vectors;
@@ -923,6 +940,8 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 		}
 	}
 
+	fclose(file_p);
+
 	for(uint64_t i = 0 ; i < w2v->num_vectors ; i++){
 		w2v->keys[i].active_in_current_graph = 0;
 	}
@@ -936,6 +955,7 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 	printf("errno: %i\n", errno);
 	if(w2v->vectors != NULL){free(w2v->vectors);}
 	if(w2v->keys != NULL){free(w2v->keys);}
+	fclose(file_p);
 	goto return_failure;
 
 	return_failure:
@@ -1021,7 +1041,10 @@ void free_graph(struct graph* restrict g){
 	}
 	free(g->nodes);
 	// if(g->dist_mat != NULL){free(g->dist_mat);}
-	free_matrix(&(g->dist_mat));
+	if(g->dist_mat_must_be_freed){
+		free_matrix(&(g->dist_mat));
+		g->dist_mat_must_be_freed = 0;
+	}
 }
 
 struct distance_two_nodes {
