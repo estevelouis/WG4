@@ -40,7 +40,7 @@ else
 fi
 
 CMD_ARGS="--enable_pairwise=0 \\
-    --enable_non_disparity_functions=0 \\
+    --enable_non_disparity_functions=1 \\
     --stirling_alpha=0.25 \\
     --num_row_threads=256 \\
     --num_matrix_threads=256 \\
