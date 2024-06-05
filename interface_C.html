@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>C Interface &#8212; DiversUtils  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Python Interface" href="interface_python.html" />
+    <link rel="prev" title="Installation" href="installation.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">DiversUtils</a></h1>
+
+
+
+<p class="blurb">Measuring diversity in linguistic data</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=estevelouis&repo=WG4&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">C Interface</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#repository-structure">Repository structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#large-scale-benchmarking">Large-scale benchmarking</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#makefile">makefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#available-macros">Available macros</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#performance-macros">Performance macros</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#diversity-function-macros">Diversity function macros</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#linking">Linking</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="interface_python.html">Python Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Benchmarking Diversity Measures</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="installation.html" title="previous chapter">Installation</a></li>
+      <li>Next: <a href="interface_python.html" title="next chapter">Python Interface</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="c-interface">
+<h1>C Interface<a class="headerlink" href="#c-interface" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="repository-structure">
+<h2>Repository structure<a class="headerlink" href="#repository-structure" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">src</span></code> contains the source code, with headers under <code class="docutils literal notranslate"><span class="pre">src/include</span></code>.
+Most important files include: * <code class="docutils literal notranslate"><span class="pre">src/include/graph.h</span></code> and
+<code class="docutils literal notranslate"><span class="pre">src/include/dfunctions.h</span></code> for diversity functions *
+<code class="docutils literal notranslate"><span class="pre">src/include/cupt/*</span></code> and <code class="docutils literal notranslate"><span class="pre">src/include/jsonl/*</span></code> for parsers *
+<code class="docutils literal notranslate"><span class="pre">src/include/udpipe_interface.hpp</span></code> and
+<code class="docutils literal notranslate"><span class="pre">src/include/udpipe_interface/*</span></code> for UDPipe interface</p>
+</div>
+<div class="section" id="large-scale-benchmarking">
+<h2>Large-scale benchmarking<a class="headerlink" href="#large-scale-benchmarking" title="Permalink to this headline">¶</a></h2>
+<p>In the standard use case, you have some data in files (currently,
+<code class="docutils literal notranslate"><span class="pre">*.conllu</span></code>, <code class="docutils literal notranslate"><span class="pre">*.cupt</span></code>, and <code class="docutils literal notranslate"><span class="pre">*.jsonl</span></code> are supported) and you wish to
+assess how diverse they are, using a set of diversity functions.</p>
+<div class="section" id="makefile">
+<h3>makefile<a class="headerlink" href="#makefile" title="Permalink to this headline">¶</a></h3>
+<p>You may change default parameters in <code class="docutils literal notranslate"><span class="pre">makefile</span></code>. Most parameters can
+be overriden in CLI. For example, if in the makefile you wrote</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>...
+ENABLE_DISPARITY_FUNCTIONS = 0
+...
+</pre></div>
+</div>
+<p>the default behaviour will be to ignore disparity functions, but when
+running the program you may add <code class="docutils literal notranslate"><span class="pre">--enable_disparity_functions=1</span></code> in
+the command line to change the behaviour.</p>
+<p>You may compile the program with</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>measurement_full
+</pre></div>
+</div>
+<p>which should yield a binary <code class="docutils literal notranslate"><span class="pre">bin/main_measurement</span></code>. Once you’ve
+defined all the files you with to process in <code class="docutils literal notranslate"><span class="pre">measurement_files.txt</span></code>,
+you may run the executable.</p>
+</div>
+<div class="section" id="outputs">
+<h3>Outputs<a class="headerlink" href="#outputs" title="Permalink to this headline">¶</a></h3>
+<p>It should generate a <code class="docutils literal notranslate"><span class="pre">measurement_output.tsv</span></code>,
+<code class="docutils literal notranslate"><span class="pre">measurement_output_timing.tsv</span></code>, and <code class="docutils literal notranslate"><span class="pre">measurement_output_memory.tsv</span></code>
+(or what is set respectively by <code class="docutils literal notranslate"><span class="pre">OUTPUT_PATH</span></code>, <code class="docutils literal notranslate"><span class="pre">OUTPUT_PATH_TIMING</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">OUTPUT_PATH_MEMORY</span></code>).</p>
+</div>
+</div>
+<div class="section" id="available-macros">
+<h2>Available macros<a class="headerlink" href="#available-macros" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="performance-macros">
+<h3>Performance macros<a class="headerlink" href="#performance-macros" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">NUM_ROW_THREADS</span></code>: integer, number of threads to use if distance
+computation is done by row batches. See
+<code class="docutils literal notranslate"><span class="pre">ENABLE_MULTITHREADED_ROW_GENERATION</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">NUM_MATRIX_THREADS</span></code>: integer, number of threads to use if distance
+computation is done directly for the full matrix. See
+<code class="docutils literal notranslate"><span class="pre">ENABLE_MULTITHREADED_MATRIX_GENERATION</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ROW_GENERATION_BATCH_SIZE</span></code>: integer, number of rows to compute at
+once if distance computation is done by row batches.
+<code class="docutils literal notranslate"><span class="pre">ROW_GENERATION_BATCH_SIZE</span> <span class="pre">&lt;=</span> <span class="pre">NUM_ROW_THREADS</span></code> must be true in
+order to have at least one thread per computed row. See
+<code class="docutils literal notranslate"><span class="pre">ENABLE_MULTITHREADED_ROW_GENERATION</span></code> and <code class="docutils literal notranslate"><span class="pre">NUM_ROW_THREADS</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_AVX256</span></code>: boolean, whether to activate AVX256 instructions.
+This vectorises operations and improves speed. <strong>Setting
+``ENABLE_AVX256=1`` may break builds on older machines.</strong></p></li>
+</ul>
+</div>
+<div class="section" id="diversity-function-macros">
+<h3>Diversity function macros<a class="headerlink" href="#diversity-function-macros" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_DISPARITY_FUNCTIONS</span></code>: boolean, whether to activate
+disparity functions. Listed below are the functions that can be
+deactivated.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_STIRLING</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_RICOTTA_SZEIDL</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_PAIRWISE</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_LEXICOGRAPHIC</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY</span></code>:
+boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_LEINSTER_COBBOLD_DIVERSITY</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_FUNCTIONAL_EVENNESS</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_FUNCTIONAL_DISPERSION</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED</span></code>: boolean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ENABLE_NON_DISPARITY_FUNCTIONS</span></code>: boolean, whether to activate
+non-disparity functions. Listed below are the functions that can be
+deactivated.</p></li>
+</ul>
+<p>TODO: group the macros by types of functions?</p>
+<p>Use cases:
+For disparity functions, you must first enable disparities generally (ENABLE_DISPARITY_FUNCTIONS or –enable_disparity_functions) and then enable the individual disparities you want (for example with ENABLE_PAIRWISE or –enable_pairwise).</p>
+</div>
+</div>
+<div class="section" id="linking">
+<h2>Linking<a class="headerlink" href="#linking" title="Permalink to this headline">¶</a></h2>
+<p>For linking purposes, the <code class="docutils literal notranslate"><span class="pre">LD_LIBRARY_PATH</span></code> environment variable must
+contain both <code class="docutils literal notranslate"><span class="pre">$HOME/.local/lib/diversutils</span></code> and the standard lib path
+of the system (usually <code class="docutils literal notranslate"><span class="pre">/usr/lib/x86_64-linux-gnu</span></code>).</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;2024 Université Paris-Saclay.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.4.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+      |
+      <a href="_sources/interface_C.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

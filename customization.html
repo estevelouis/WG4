@@ -1,0 +1,411 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Customization &#8212; Alabaster  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="installation.html" />
+    <link rel="prev" title="Alabaster: a Sphinx theme" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Alabaster</a></h1>
+
+
+
+<p class="blurb">A light, configurable Sphinx theme</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=sphinx-doc&repo=alabaster&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Customization</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#custom-stylesheet">Custom stylesheet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#theme-options">Theme options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basics">Basics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#service-links-and-badges">Service links and badges</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#non-service-sidebar-control">Non-service sidebar control</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#header-footer-options">Header/footer options</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#style-colors">Style colors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fonts">Fonts</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Alabaster: a Sphinx theme</a></li>
+      <li>Next: <a href="installation.html" title="next chapter">Installation</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+<h3 class="donation">Donate/support</h3>
+
+
+
+
+
+
+
+<p>
+Professionally-supported Alabaster is available with the
+<a href="https://tidelift.com/subscription/pkg/pypi-alabaster?utm_source=pypi-alabaster&utm_medium=referral&utm_campaign=docs">Tidelift Subscription</a>.
+</p>
+
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="customization">
+<h1>Customization<a class="headerlink" href="#customization" title="Permalink to this headline">¶</a></h1>
+<p>Alabaster’s behavior &amp; style can be customized in multiple ways:</p>
+<ul>
+<li><p>Various template-level or nontrivial-style settings can be configured via
+your <code class="docutils literal notranslate"><span class="pre">conf.py</span></code> in <code class="docutils literal notranslate"><span class="pre">html_theme_options</span></code>; see <a class="reference internal" href="#theme-options"><span class="std std-ref">Theme options</span></a>.</p></li>
+<li><p>As of Alabaster 0.7.8, you can provide your own CSS stylesheet overrides via
+a <a class="reference internal" href="#custom-stylesheet"><span class="std std-ref">custom stylesheet</span></a>. This is suitable for changes
+that only need minor CSS modifications.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Some theme options implemented prior to 0.7.8 would have been more suitable
+as local custom stylesheet overrides. Therefore:</p>
+<ul>
+<li><p>We no longer accept feature requests which are more appropriately solved
+by using this functionality instead.</p></li>
+<li><p>In future backwards-incompatible versions we may deprecate some of those
+options; as such we highly recommend leveraging the custom stylesheet
+whenever possible, even if an option is present below.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>When in doubt, simply check <a class="reference external" href="https://github.com/sphinx-doc/alabaster/blob/master/alabaster/static/alabaster.css_t">the built-in stylesheet’s template</a>
+to see whether the option you’re looking at is a basic variable
+insertion or something more complicated.)</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+<div class="section" id="custom-stylesheet">
+<span id="id1"></span><h2>Custom stylesheet<a class="headerlink" href="#custom-stylesheet" title="Permalink to this headline">¶</a></h2>
+<p>If you need to modify Alabaster’s default CSS styles in a way not covered by
+the theme options from the next section, you may provide a custom CSS
+stylesheet as follows:</p>
+<ul class="simple">
+<li><p>Create a file named <code class="docutils literal notranslate"><span class="pre">custom.css</span></code> anywhere you prefer (typically
+<code class="docutils literal notranslate"><span class="pre">_static/</span></code>, but this is solely convention) containing your desired
+overrides to the CSS found in Alabaster’s <code class="docutils literal notranslate"><span class="pre">static/alabaster_css_t</span></code>.</p></li>
+<li><p>Set the core Sphinx option <a class="reference external" href="https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-html_static_path">html_static_path</a>
+to either that file’s path, or the directory it lives within.</p></li>
+</ul>
+</div>
+<div class="section" id="theme-options">
+<span id="id2"></span><h2>Theme options<a class="headerlink" href="#theme-options" title="Permalink to this headline">¶</a></h2>
+<p>Alabaster’s primary configuration route is the <code class="docutils literal notranslate"><span class="pre">html_theme_options</span></code> variable,
+set in <code class="docutils literal notranslate"><span class="pre">conf.py</span></code> alongside the rest, e.g.:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">html_theme_options</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;logo&#39;</span><span class="p">:</span> <span class="s1">&#39;logo.png&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;github_user&#39;</span><span class="p">:</span> <span class="s1">&#39;sphinx-doc&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;github_repo&#39;</span><span class="p">:</span> <span class="s1">&#39;alabaster&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The following subsections detail available such options, including notes about
+behavior. Default values can be found by viewing <a class="reference external" href="https://github.com/sphinx-doc/alabaster/blob/master/alabaster/theme.conf">theme.conf</a>
+directly.</p>
+<div class="section" id="basics">
+<h3>Basics<a class="headerlink" href="#basics" title="Permalink to this headline">¶</a></h3>
+<p>Settings related to text display, logo, etc.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">body_text_align</span></code>: Which CSS <code class="docutils literal notranslate"><span class="pre">text-align</span></code> value to use for body text
+(if there is any.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">canonical_url</span></code>: <strong>Deprecated</strong>, please use the <a class="reference external" href="https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-html_baseurl">html_baseurl</a> Sphinx option instead.
+If set, is used as the base URL (set before the relative
+path/pagename) for a <code class="docutils literal notranslate"><span class="pre">&lt;link</span> <span class="pre">rel=&quot;canonical&quot;&gt;</span></code> <a class="reference external" href="https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls">canonical URL</a> header tag.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This value must end with a trailing slash.</p>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">description</span></code>: Text blurb about your project, to appear under the logo.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">description_font_style</span></code>: Which CSS <code class="docutils literal notranslate"><span class="pre">font-style</span></code> to use for description
+text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fixed_sidebar</span></code>: Makes the sidebar ‘fixed’ or pinned in place, so that the
+main body of the page scrolls but the sidebar remains visible. (Applies only
+to desktop window sizes; the mobile view is unaffected.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logo</span></code>: Relative path (from <code class="docutils literal notranslate"><span class="pre">$PROJECT/_static/</span></code>) to a logo image, which
+will appear in the upper left corner above the name of the project.</p>
+<ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">logo</span></code> is not set, your <code class="docutils literal notranslate"><span class="pre">project</span></code> name setting (from the top
+level Sphinx config) will be used in a text header instead. This
+preserves a link back to your homepage from inner doc pages.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logo_name</span></code>: Set to <code class="docutils literal notranslate"><span class="pre">True</span></code> to insert your site’s <code class="docutils literal notranslate"><span class="pre">project</span></code> name
+under the logo image as text, or to any string to include arbitrary text.
+Useful if your logo doesn’t include the project name itself.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logo_text_align</span></code>: Which CSS <code class="docutils literal notranslate"><span class="pre">text-align</span></code> value to use for logo text
+(if there is any.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">page_width</span></code>: CSS width specifier controlling default content/page width.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_width</span></code>: CSS width specifier controlling default sidebar width.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">touch_icon</span></code>: Path to an image (as with <code class="docutils literal notranslate"><span class="pre">logo</span></code>, relative to
+<code class="docutils literal notranslate"><span class="pre">$PROJECT/_static/</span></code>) to be used for an iOS application icon, for when
+pages are saved to an iOS device’s home screen via Safari.</p></li>
+</ul>
+</div>
+<div class="section" id="service-links-and-badges">
+<h3>Service links and badges<a class="headerlink" href="#service-links-and-badges" title="Permalink to this headline">¶</a></h3>
+<p>Third-party services (GitHub, Travis-CI, etc etc) and related badges or
+banners.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">analytics_id</span></code>: Set to your <a class="reference external" href="https://marketingplatform.google.com/about/analytics/">Google Analytics</a> ID (e.g. <code class="docutils literal notranslate"><span class="pre">UA-#######-##</span></code>) to enable
+tracking.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">badge_branch</span></code>: Set which branch is used in the Travis, CodeCov, etc
+badges.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">codecov_button</span></code>: <code class="docutils literal notranslate"><span class="pre">true</span></code>, <code class="docutils literal notranslate"><span class="pre">false</span></code> or a Github-style <code class="docutils literal notranslate"><span class="pre">&quot;account/repo&quot;</span></code>
+string - used to display a <a class="reference external" href="https://about.codecov.io">Codecov</a> build status
+button in the sidebar. If <code class="docutils literal notranslate"><span class="pre">true</span></code>, uses your <code class="docutils literal notranslate"><span class="pre">github_(user|repo)</span></code>
+settings.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">donate_url</span></code>: URL to generic/arbitrary donation service; causes display of
+a basic ‘Donate’ badge/shield (from <a class="reference external" href="https://shields.io">https://shields.io</a>) linking to the URL
+given.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">github_banner</span></code>: <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> - whether to apply a ‘Fork me on
+Github’ banner in the top right corner of the page.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code>, requires that you set <code class="docutils literal notranslate"><span class="pre">github_user</span></code> and <code class="docutils literal notranslate"><span class="pre">github_repo</span></code>
+(see below).</p></li>
+<li><p>May also submit a string file path (as with <code class="docutils literal notranslate"><span class="pre">logo</span></code>, relative to
+<code class="docutils literal notranslate"><span class="pre">$PROJECT/_static/</span></code>) to be used as the banner image instead of the
+default.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">github_button</span></code>: <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> - whether to link to your Github.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">true</span></code>, requires that you set <code class="docutils literal notranslate"><span class="pre">github_user</span></code> and <code class="docutils literal notranslate"><span class="pre">github_repo</span></code>.</p></li>
+<li><p>There are also the <code class="docutils literal notranslate"><span class="pre">github_type</span></code> and <code class="docutils literal notranslate"><span class="pre">github_count</span></code> options, which
+behave as described in <a class="reference external" href="https://ghbtns.com">Github Buttons’ documentation</a>.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">github_repo</span></code>: Used by <code class="docutils literal notranslate"><span class="pre">github_button</span></code> and <code class="docutils literal notranslate"><span class="pre">github_banner</span></code> (see above);
+does nothing if both of those are set to <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">github_user</span></code>: Used by <code class="docutils literal notranslate"><span class="pre">github_button</span></code> and <code class="docutils literal notranslate"><span class="pre">github_banner</span></code> (see above);
+does nothing if both of those are set to <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gittip_user</span></code> / <code class="docutils literal notranslate"><span class="pre">gratipay_user</span></code>: <strong>Deprecated</strong>, as that service is no
+longer running. These options still exist (removing them would break
+backwards compatibility; Sphinx errors when users try to set nonexistent
+options) but they no longer do anything.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tidelift_url</span></code>: Set this to your <a class="reference external" href="https://tidelift.com/">Tidelift</a>
+project URL if you want a “Professional support” section in your sidebar.</p>
+<ul class="simple">
+<li><p>If copying the URL straight from Tidelift’s site, you’ll probably want to
+change <code class="docutils literal notranslate"><span class="pre">&amp;utm_campaign=readme</span></code> to <code class="docutils literal notranslate"><span class="pre">&amp;utm_campaign=docs</span></code>.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">travis_button</span></code>: <code class="docutils literal notranslate"><span class="pre">true</span></code>, <code class="docutils literal notranslate"><span class="pre">false</span></code> or a Github-style <code class="docutils literal notranslate"><span class="pre">&quot;account/repo&quot;</span></code>
+string - used to display a <a class="reference external" href="https://travis-ci.org">Travis-CI</a> build status
+button in the sidebar. If <code class="docutils literal notranslate"><span class="pre">true</span></code>, uses your <code class="docutils literal notranslate"><span class="pre">github_(user|repo)</span></code>
+settings.</p></li>
+</ul>
+</div>
+<div class="section" id="non-service-sidebar-control">
+<h3>Non-service sidebar control<a class="headerlink" href="#non-service-sidebar-control" title="Permalink to this headline">¶</a></h3>
+<p>Sidebar-related options that aren’t directly related to service links.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">extra_nav_links</span></code>: Dictionary mapping link names to link targets; these
+will be added in a UL below the main sidebar navigation (provided you’ve
+enabled <code class="docutils literal notranslate"><span class="pre">navigation.html</span></code> via the <code class="docutils literal notranslate"><span class="pre">html_sidebars</span></code> option; see
+<a class="reference internal" href="installation.html"><span class="doc">Installation</span></a>.) Useful for static links outside your Sphinx doctree.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_related</span></code>: Boolean controlling whether the sidebar
+‘next/previous/related’ secondary navigation elements are hidden or
+displayed. Defaults to <code class="docutils literal notranslate"><span class="pre">false</span></code> since on many sites these elements are
+superfluous.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This is distinct from the <code class="docutils literal notranslate"><span class="pre">show_relbars</span></code> setting found in the
+header/footer options; the two visual components are orthogonal and may be
+enabled/disabled independently of one another.</p>
+</div>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">sidebar_collapse</span></code>: Boolean determining whether all TOC entries that</dt><dd><p>are not ancestors of the current page are collapsed.
+You can read more about this in the Sphinx toctree
+<a class="reference external" href="https://www.sphinx-doc.org/en/master/development/templating.html#toctree">docs</a>.</p>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_includehidden</span></code>: Boolean determining whether the TOC sidebar
+should include hidden Sphinx toctree elements. Defaults to <code class="docutils literal notranslate"><span class="pre">true</span></code> so you
+can use <code class="docutils literal notranslate"><span class="pre">:hidden:</span></code> in your index page’s root toctree &amp; avoid having 2x
+copies of your navigation on your landing page.</p></li>
+</ul>
+</div>
+<div class="section" id="header-footer-options">
+<h3>Header/footer options<a class="headerlink" href="#header-footer-options" title="Permalink to this headline">¶</a></h3>
+<p>Which elements should appear in the header and/or footer, or modification of
+same.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_powered_by</span></code>: Boolean controlling display of the <code class="docutils literal notranslate"><span class="pre">Powered</span> <span class="pre">by</span>
+<span class="pre">Sphinx</span> <span class="pre">N.N.N.</span> <span class="pre">&amp;</span> <span class="pre">Alabaster</span> <span class="pre">M.M.M</span></code> section of the footer. When <code class="docutils literal notranslate"><span class="pre">true</span></code>, is
+displayed next to the copyright information; when <code class="docutils literal notranslate"><span class="pre">false</span></code>, is hidden.</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version 0.17.14: </span>Set <code class="docutils literal notranslate"><span class="pre">html_show_sphinx</span></code> to <code class="docutils literal notranslate"><span class="pre">True</span></code> or <code class="docutils literal notranslate"><span class="pre">False</span></code> in <code class="docutils literal notranslate"><span class="pre">conf.py</span></code> instead.</p>
+</div>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">show_relbars</span></code>: <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> - used to display <em>next</em> and
+<em>previous</em> links above and below the main page content. If you only want to
+display one, this setting can be further overridden through the
+<code class="docutils literal notranslate"><span class="pre">show_relbar_top</span></code> and <code class="docutils literal notranslate"><span class="pre">show_relbar_bottom</span></code> settings.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This is distinct from the <code class="docutils literal notranslate"><span class="pre">show_related</span></code> setting found in the sidebar
+control options, which controls sidebar-only next/previous links.</p>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="style-colors">
+<h3>Style colors<a class="headerlink" href="#style-colors" title="Permalink to this headline">¶</a></h3>
+<p>These should be fully qualified CSS color specifiers such as <code class="docutils literal notranslate"><span class="pre">#004B6B</span></code> or
+<code class="docutils literal notranslate"><span class="pre">#444</span></code>. The first few items in the list are “global” colors used as defaults
+for many of the others; update these to make sweeping changes to the
+colorscheme. The more granular settings can be used to override as needed.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">anchor</span></code>: Foreground color of section anchor links (the ‘paragraph’
+symbol that shows up when you mouseover page section headers.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">anchor_hover_bg</span></code>: Background color of <code class="docutils literal notranslate"><span class="pre">anchor</span></code> text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">anchor_hover_fg</span></code>: Foreground color of section anchor links (as above)
+when moused over.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">body_text</span></code>: Main content text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">code_highlight</span></code>: Color of highlight when using <code class="docutils literal notranslate"><span class="pre">:emphasize-lines:</span></code> in a code block.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">footer_text</span></code>: Footer text (includes links.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">footnote_bg</span></code>: Background of footnote blocks.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">footnote_border</span></code>: Border of same.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_1</span></code>: Dark gray.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_2</span></code>: Light gray.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_3</span></code>: Medium gray.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">link_hover</span></code>: Body links, hovered.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">link</span></code>: Non-hovered body links.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">narrow_sidebar_bg</span></code>: Background of ‘sidebar’ when narrow window forces
+it to the bottom of the page.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">narrow_sidebar_fg</span></code>: Text color of same.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">narrow_sidebar_link</span></code>: Link color of same.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">note_bg</span></code>: Background of <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">note::</span></code> blocks.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">note_border</span></code>: Border of same.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pink_1</span></code>: Light pink.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pink_2</span></code>: Medium pink.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pre_bg</span></code>: Background of preformatted text blocks (including code
+snippets.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">relbar_border</span></code>: Color of border between bar holding <em>next</em> and <em>previous</em>
+links, and the rest of the page content.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">seealso_bg</span></code>: Background of <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">seealso::</span></code> blocks.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">seealso_border</span></code>: Border of same.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_header</span></code>: Sidebar headers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_hr</span></code>: Color of sidebar horizontal rule dividers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_link</span></code>: Sidebar links (there is no hover variant.) Applies to
+both header &amp; text links.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_list</span></code>: Foreground color of sidebar list bullets &amp; unlinked text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_link_underscore</span></code>: Sidebar links’ underline (technically a
+bottom-border).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_search_button</span></code>: Background color of the search field’s ‘Go’
+button.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sidebar_text</span></code>: Sidebar paragraph text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warn_bg</span></code>: Background of <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">warn::</span></code> blocks.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warn_border</span></code>: Border of same.</p></li>
+</ul>
+</div>
+<div class="section" id="fonts">
+<h3>Fonts<a class="headerlink" href="#fonts" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">caption_font_size</span></code>: Font size of caption block text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">caption_font_family</span></code>: Font family of caption block text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">code_font_size</span></code>: Font size of code block text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">code_font_family</span></code>: Font family of code block text. Defaults to
+<code class="docutils literal notranslate"><span class="pre">'Consolas',</span> <span class="pre">'Menlo',</span> <span class="pre">'DejaVu</span> <span class="pre">Sans</span> <span class="pre">Mono',</span> <span class="pre">'Bitstream</span> <span class="pre">Vera</span> <span class="pre">Sans</span> <span class="pre">Mono',</span>
+<span class="pre">monospace</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">font_family</span></code>: Font family of body text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">font_size</span></code>: Font size of body text.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">head_font_family</span></code>: Font family of headings.  Defaults to <code class="docutils literal notranslate"><span class="pre">'Garamond',</span>
+<span class="pre">'Georgia',</span> <span class="pre">serif</span></code>.</p></li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;2024 Jeff Forcier.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.4.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+      |
+      <a href="_sources/customization.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

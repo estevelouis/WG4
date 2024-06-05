@@ -1,0 +1,146 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Benchmarking Diversity Measures &#8212; DiversUtils  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Python Interface" href="interface_python.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">DiversUtils</a></h1>
+
+
+
+<p class="blurb">Measuring diversity in linguistic data</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=estevelouis&repo=WG4&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interface_C.html">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interface_python.html">Python Interface</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Benchmarking Diversity Measures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#extract-texts-from-jsonl-into-txt">1 Extract texts from jsonl into txt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#train-word2vec-for-each-language">2 Train word2vec for each language</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#diversity">3 Diversity</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="interface_python.html" title="previous chapter">Python Interface</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="benchmarking-diversity-measures">
+<h1>Benchmarking Diversity Measures<a class="headerlink" href="#benchmarking-diversity-measures" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="extract-texts-from-jsonl-into-txt">
+<h2>1 Extract texts from jsonl into txt<a class="headerlink" href="#extract-texts-from-jsonl-into-txt" title="Permalink to this headline">¶</a></h2>
+<p>To extract texts from JSONL into a TXT file, use the <cite>jsonl_to_word2vec_format</cite> process. This process operates on the .jsonl files located under the <cite>data/</cite> directory, starting with the two letters of the language. It generates a .txt file containing <cite>TARGET_NUMBER_DOCUMENTS</cite> (defined in the makefile, default 1M) documents, where each “document” corresponds to a line in the JSONL file. Subsequently, it trains a Word2Vec model on this data and stores the resulting model under <cite>word2vec/bin/</cite>, with the file name starting with the two letters of the language.</p>
+</div>
+<div class="section" id="train-word2vec-for-each-language">
+<h2>2 Train word2vec for each language<a class="headerlink" href="#train-word2vec-for-each-language" title="Permalink to this headline">¶</a></h2>
+<p>This step requires the use of the <cite>word2vec</cite> tool available at <a class="reference external" href="https://github.com/dav/word2vec">https://github.com/dav/word2vec</a>. To set up the <cite>word2vec</cite> tool, execute either of the following commands:</p>
+<ul class="simple">
+<li><p><cite>make setup_word2vec_learner</cite></p></li>
+<li><p><cite>git clone https://github.com/dav/word2vec.git</cite> followed by <cite>cd word2vec</cite> and <cite>make build</cite></p></li>
+</ul>
+<p>In this case, the training algorithm adopted is cbow (Continuous Bag of Words), and each word vector will have 100 dimensions.</p>
+</div>
+<div class="section" id="diversity">
+<h2>3 Diversity<a class="headerlink" href="#diversity" title="Permalink to this headline">¶</a></h2>
+<p>For device-specific parameters, consider the following configurations:</p>
+<ul class="simple">
+<li><p><cite>ENABLE_AVX256=1</cite>: This setting vectorizes computation on machines capable of AVX256.</p></li>
+<li><p><cite>NUM_ROW_THREADS</cite>, <cite>NUM_MATRIX_THREADS</cite>, and <cite>ROW_GENERATION_BATCH_SIZE</cite>: Adjust these parameters to match the number of threads available on the device for optimal performance.</p></li>
+</ul>
+<p>Regarding diversity functions:</p>
+<ul class="simple">
+<li><p>For the non-disparity run, set <cite>ENABLE_DISPARITY_FUNCTIONS</cite> to 0 and <cite>ENABLE_NON_DISPARITY_FUNCTIONS</cite> to 1. For the disparity run, do the opposite.</p></li>
+</ul>
+<p>Additionally, the process supports taking snapshots at logarithmic intervals instead of linear for languages with massive amounts of data.</p>
+<p>Data parameters:</p>
+<ul class="simple">
+<li><p><cite>DOCUMENT_COUNT_RECOMPUTE_STEP = 1</cite></p></li>
+<li><p><cite>DOCUMENT_RECOMPUTE_STEP_USE_LOG10 = 1</cite></p></li>
+<li><p><cite>DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10 = 0.1</cite></p></li>
+</ul>
+<p>Note: The provided URLs are for reference and may need to be updated based on the actual location of the resources.</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;2024 Université Paris-Saclay.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.4.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.13</a>
+      
+      |
+      <a href="_sources/tutorial.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
