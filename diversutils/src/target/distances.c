@@ -25,9 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DISTANCES_H
-#define DISTANCES_H
-
 #include <math.h>
 #include <stdint.h>
 
@@ -333,4 +330,3 @@ float rootless_angular_minkowski_distance_fp32(float* restrict a, float* restric
 	return powf(angular_minkowski_distance_fp32(a, b, n, order), order);
 }
 
-#endif

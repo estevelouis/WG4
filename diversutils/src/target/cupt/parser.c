@@ -25,33 +25,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef CUPT_PARSER_H
-#define CUPT_PARSER_H
-
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
 
+#include "cupt/parser.h"
 #include "cupt/constants.h"
 
-/* BASED ON UD FORMAT */
-struct token {
-	char id_raw[TOKEN_ID_RAW_SIZE];
-	char form[TOKEN_FORM_SIZE];
-	char lemma[TOKEN_LEMMA_SIZE];
-	char upos[TOKEN_UPOS_SIZE];
-	char xpos[TOKEN_XPOS_SIZE];
-	char feats[TOKEN_FEATS_SIZE];
-	char head[TOKEN_HEAD_SIZE];
-	char deprel[TOKEN_DEPREL_SIZE];
-	char deps[TOKEN_DEPS_SIZE];
-	char misc[TOKEN_MISC_SIZE];
-	char mwe[TOKEN_MWE_SIZE];
-};
-
-
-int32_t create_token(struct token* t, char* id_raw, char* form, char* lemma, char* upos, char* xpos, char* feats, char* head, char* deprel, char* deps, char* misc, char* mwe){
+int32_t create_token(struct token* const t, char* const id_raw, char* const form, char* const lemma, char* const upos, char* const xpos, char* const feats, char* const head, char* const deprel, char* const deps, char* const misc, char* const mwe){
 	memset(t->id_raw, '\0', TOKEN_ID_RAW_SIZE);
 	memset(t->form, '\0', TOKEN_FORM_SIZE);
 	memset(t->lemma, '\0', TOKEN_LEMMA_SIZE);
@@ -79,7 +61,7 @@ int32_t create_token(struct token* t, char* id_raw, char* form, char* lemma, cha
 	return 0;
 }
 
-int32_t serialize_token(struct token* t, char* bfr, int32_t* bytes_written, int8_t null_terminate){
+int32_t serialize_token(struct token* const t, char* const bfr, int32_t* const bytes_written, const int8_t null_terminate){
 	size_t offset = 0;
 	size_t length = 0;
 
@@ -159,14 +141,7 @@ int32_t serialize_token(struct token* t, char* bfr, int32_t* bytes_written, int8
 
 /* ======== SENTENCE ======== */
 
-struct sentence {
-	struct token* tokens;
-	int32_t capacity;
-	int32_t num_tokens;
-	char sentence_id[SENTENCE_SENT_ID_SIZE];
-};
-
-int32_t create_sentence(struct sentence* s, char* sentence_id){
+int32_t create_sentence(struct sentence* const s, const char* const sentence_id){
 	void* malloc_pointer;
 
 	memset(s->sentence_id, '\0', SENTENCE_SENT_ID_SIZE);
@@ -232,11 +207,11 @@ int32_t recreate_sentence(struct sentence* const s, const char* const sentence_i
 	return 0;
 }
 
-void free_sentence(struct sentence* s){
+void free_sentence(struct sentence* const s){
 	free(s->tokens);
 }
 
-int32_t add_token_to_sentence(struct sentence* s, struct token* t){
+int32_t add_token_to_sentence(struct sentence* const s, struct token* const t){
 	if(s->num_tokens >= s->capacity){
 		size_t new_size = (size_t) ((((size_t) s->capacity) + SENTENCE_TOKEN_CAPACITY_STEP) * sizeof(struct token)); // compliance
 		s->tokens = realloc(s->tokens, new_size);
@@ -252,7 +227,7 @@ int32_t add_token_to_sentence(struct sentence* s, struct token* t){
 	return 0;
 }
 
-size_t buffer_size_for_serialization_of_sentence(struct sentence* s){
+size_t buffer_size_for_serialization_of_sentence(struct sentence* const s){
 	size_t output = 0;
 	output += 10; /* # sent_id= */
 	output += SENTENCE_SENT_ID_SIZE;
@@ -260,7 +235,7 @@ size_t buffer_size_for_serialization_of_sentence(struct sentence* s){
 	return output;
 }
 
-int32_t serialize_sentence(struct sentence* s, char* bfr, int32_t* bytes_written){
+int32_t serialize_sentence(struct sentence* const s, char* const bfr, int32_t* const bytes_written){
 	size_t offset = 0;
 	size_t length = 0;
 	char* sent_id_init = "# sent_id=";
@@ -295,15 +270,6 @@ int32_t serialize_sentence(struct sentence* s, char* bfr, int32_t* bytes_written
 
 /* ======== FILE READER ======= */
 
-struct cupt_sentence_iterator {
-	FILE* file_ptr;
-	int8_t file_is_open;
-	int8_t file_is_done;
-	char bfr_read[FILE_READ_BUFFER_SIZE];
-	struct sentence current_sentence;
-	int32_t sentence_to_free;
-};
-
 int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator* const csi, const char* const file_name){
 	int32_t err = 0;
 
@@ -333,12 +299,12 @@ int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator* const csi, 
 	return 0;
 }
 
-void free_cupt_sentence_iterator(struct cupt_sentence_iterator* csi){
+void free_cupt_sentence_iterator(struct cupt_sentence_iterator* const csi){
 	free_sentence(&(csi->current_sentence));
 	fclose(csi->file_ptr);
 }
 
-int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict csi){
+int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* const restrict csi){
 	if(csi->current_sentence.tokens == NULL){
 		printf("csi->current_sentence.tokens == NULL\n");
 		exit(1);
@@ -558,5 +524,3 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator* restrict c
 
 	return 0;	
 }
-
-#endif

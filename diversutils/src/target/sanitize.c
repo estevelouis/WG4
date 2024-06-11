@@ -1,5 +1,8 @@
-#ifndef SANITIZE_H
-#define SANITIZE_H
+#include <stddef.h> // size_t
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 int32_t sanitize_for_shell(const char* const s, const size_t n, char** const z){
 	size_t alloc_size = n + 1024;
@@ -49,4 +52,3 @@ int32_t sanitize_for_shell(const char* const s, const size_t n, char** const z){
 	return 0;
 }
 
-#endif

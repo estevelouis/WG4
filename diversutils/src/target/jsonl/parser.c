@@ -25,23 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef JSONL_PARSER_H
-#define JSONL_PARSER_H
-
-/**/
-enum {
-	TOKENIZATION_METHOD_REGEX  = 0,
-	TOKENIZATION_METHOD_UDPIPE = 1,
-	TOKENIZATION_METHOD_UDPIPE_EMBEDDED = 2
-};
-/**/
-
-#ifndef TOKENIZATION_METHOD
-// #define TOKENIZATION_METHOD REGEX
-// #define TOKENIZATION_METHOD TOKENIZATION_METHOD_REGEX
-#define TOKENIZATION_METHOD 0 // regex
-#endif
-
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -49,8 +32,6 @@ enum {
 #include<sys/types.h> // ?
 #include<sys/stat.h>
 #include<unistd.h> // ?
-// #if TOKENIZATION_METHOD == REGEX
-// #if TOKENIZATION_METHOD == TOKENIZATION_METHOD_REGEX
 #if TOKENIZATION_METHOD == 0
 #include<regex.h>
 #endif
@@ -63,15 +44,8 @@ enum {
 #include "udpipe_interface/conversion.h" // transformation to pipes
 #endif
 
-/*
-extern "C++" {
-	#include "udpipe.h"
-}
-*/
+#include "jsonl/parser.h"
 
-// #if TOKENIZATION_METHOD == REGEX
-// #if TOKENIZATION_METHOD == "REGEX"
-// #if TOKENIZATION_METHOD == TOKENIZATION_METHOD_REGEX
 #if TOKENIZATION_METHOD == 0
 // const char* const REGEX_STD_PATTERN = "[a-zéèêàç\\-]+'?|[\\.\\-,;:!\\?]";
 // const char* const REGEX_STD_PATTERN = "([a-zéèêàç\\-]+'?)|[\\.\\-,;:!\\?]";
@@ -120,28 +94,6 @@ void jsonl_init_tokenization(){
 		exit(1);
 	#endif
 }
-
-struct document {
-	int32_t identifier_size;
-	int32_t text_size;
-	int32_t identifier_capacity;
-	int32_t text_capacity;
-	#if TOKENIZATION_METHOD == 0
-	regex_t reg;
-	regoff_t latest_rm_eo;
-	#elif TOKENIZATION_METHOD == 1
-	FILE* tmp_udpipe_output_file;
-	#elif TOKENIZATION_METHOD == 2
-	FILE* tmp_udpipe_output_file;
-	// int32_t output_pipefd[2];
-	char* heap_char_output;
-	#endif
-	int8_t reached_last_token;
-	int8_t usable;
-	char current_token[JSONL_CURRENT_TOKEN_BUFFER_SIZE];
-	char* identifier;
-	char* text;
-};
 
 #if (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
 int32_t launch_udpipe(struct document* const doc){
@@ -310,15 +262,6 @@ void free_document(struct document* doc){
 	#endif
 }
 
-struct jsonl_document_iterator {
-	FILE* file_ptr;
-	int8_t file_is_open;
-	int8_t file_is_done;
-	char bfr_read[JSONL_FILE_READ_BUFFER_SIZE];
-	char content_key[JSONL_CONTENT_KEY_BUFFER_SIZE];
-	struct document current_document;
-	int32_t document_to_free;
-};
 
 int32_t create_jsonl_document_iterator(struct jsonl_document_iterator* jdi, const char* file_name, const char* const content_key){
 	jdi->file_ptr = fopen(file_name, "r");
@@ -625,5 +568,3 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict
 	return 1;
 }
 
-#endif
-				

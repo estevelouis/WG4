@@ -1,6 +1,3 @@
-#ifndef LOGGING_H
-#define LOGGING_H
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -54,4 +51,3 @@ void info_format(const char* const filename, const char* const func, const int32
 	custom_format("\x1b[32m\x1b[1mINFO   ", num_calls_info, filename, func, line, msg);
 }
 
-#endif

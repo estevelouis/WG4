@@ -25,13 +25,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DISTRIBUTIONS_H_INCLUDED
-#define DISTRIBUTIONS_H_INCLUDED
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
-#include<stdint.h>
-#include<stdlib.h>
-#include<math.h>
-#include<string.h>
+#include "distributions.h"
 
 #ifndef FP_MODES
 #define FP_MODES
@@ -40,15 +41,6 @@ enum {
 	FP64
 };
 #endif
-
-struct zipfian_distribution {
-	union {
-		float* fp32;
-		double* fp64;
-	} vector;
-	double s;
-	uint32_t n;
-};
 
 int32_t create_zipfian_distribution(struct zipfian_distribution* z, double s, uint32_t n, const int8_t fp_mode){
 	size_t malloc_size = n;
@@ -142,8 +134,20 @@ int32_t zipfian_fit(double* v, uint32_t n, double* result){
 	double upper_bound = 10.0;
 	double best_s = -1.0;
 	double best_mse = -1.0;
+	double *v_copy;
+	size_t alloc_size;
+    /*
+    time_t t_start, t_end;
 
-	qsort((void*) v, n, sizeof(double), double_cmp_reverse);
+    t_start = time(NULL);
+    */
+
+	alloc_size = n * sizeof(double);
+	v_copy = malloc(alloc_size);
+	if(v_copy == NULL){perror("failed to malloc\n"); return 1;}
+	memcpy(v_copy, v, alloc_size);
+
+	qsort((void*) v_copy, n, sizeof(double), double_cmp_reverse);
 
 	for(int32_t i = 0 ; i < num_precision_levels ; i++){
 		double window = (upper_bound - lower_bound);
@@ -156,10 +160,11 @@ int32_t zipfian_fit(double* v, uint32_t n, double* result){
 			int32_t err = create_zipfian_distribution(&z, s, n, FP64);
 			if(err != 0){
 				perror("failed to call create_zipfian_distribution\n");
+				free(v_copy);
 				return 1;
 			}
 
-			double mse = mean_squared_error(v, z.vector.fp64, n);
+			double mse = mean_squared_error(v_copy, z.vector.fp64, n);
 			if(j == 0 || mse < best_mse){
 				best_s = s;
 				best_mse = mse;
@@ -177,6 +182,13 @@ int32_t zipfian_fit(double* v, uint32_t n, double* result){
 	}
 
 	(*result) = best_s;
+
+	free(v_copy);
+
+    /*
+    t_end = time(NULL);
+    printf("Zipfian curvature computed in %lus\n", t_end - t_start);
+    */
 
 	return 0;
 }
@@ -207,4 +219,3 @@ int32_t zipfian_fit_from_graph(struct graph* g, double* result){
 	return 0;
 }
 
-#endif

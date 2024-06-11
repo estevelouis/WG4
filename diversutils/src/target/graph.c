@@ -25,9 +25,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GRAPH_H
-#define GRAPH_H
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -37,95 +34,19 @@
 #include <pthread.h>
 #include <immintrin.h>
 
+// #include "graph.h"
+
 #include "general_constants.h"
 #include "distances.h"
 #include "cupt/parser.h"
 #include "stats.h"
 #include "logging.h"
 
-#ifndef ENABLE_AVX256
-#define ENABLE_AVX256 0
-#endif
-
-/*
-#ifndef NUM_MATRIX_THREADS
-#define NUM_MATRIX_THREADS 4
-#endif
-
-#ifndef NUM_ROW_THREADS
-#define NUM_ROW_THREADS 4
-#endif
-*/
-
-#define RANDOM_MODULO 65536
-#define RANDOM_MIN_VALUE -128.0
-#define RANDOM_MAX_VALUE +128.0
-
-#define MAX_ABUNDANCE +1000
-
-#define WORD2VEC_KEY_BUFFER_SIZE 64
-
 const int32_t CONSTANT_RELATIVE_PROPORTION = 1;
 
 const int32_t ENABLE_EXTREMES = 1;
 const int32_t EXTREME_STEP = 50;
 const double EXTREME_RATIO = 4.0;
-
-#ifndef FP_MODES
-#define FP_MODES
-enum {
-	FP32,
-	FP64
-};
-#endif
-
-struct graph_neighbour {
-	float distance;
-	uint64_t index;
-};
-
-struct graph_node {
-	uint16_t num_dimensions;
-	uint8_t already_considered;
-	double relative_proportion;
-	uint32_t absolute_proportion;
-	struct word2vec_entry* word2vec_entry_pointer;
-	struct graph_neighbour* neighbours;
-	uint32_t capacity_neighbours;
-	uint32_t num_neighbours;
-	pthread_mutex_t mutex_local_node;
-	union {
-		float* fp32;
-		double* fp64;
-	} vector;
-};
-
-
-struct matrix {
-	uint32_t a;
-	uint32_t b;
-	union {
-		float* fp32;
-		double* fp64;
-	} bfr;
-	uint8_t fp_mode;
-	uint8_t* active;
-	uint8_t* active_final;
-	// uint8_t to_free;
-};
-
-#define GRAPH_CAPACITY_STEP 64
-
-struct graph {
-	struct graph_node* nodes;
-	uint64_t num_nodes;
-	uint64_t capacity;
-	pthread_mutex_t mutex_nodes;
-	int16_t num_dimensions;
-	// float* dist_mat;
-	struct matrix dist_mat;
-	uint8_t dist_mat_must_be_freed;
-};
 
 int32_t create_matrix(struct matrix* const m, const uint32_t a, const uint32_t b, const int8_t fp_mode){
 	if(!(fp_mode == FP32 || fp_mode == FP64)){
@@ -241,14 +162,6 @@ int32_t distance_matrix_from_graph(const struct graph* const restrict g, struct 
 	return 0;
 }
 
-struct row_thread_arg {
-	float* vector;
-	const struct graph* g;
-	uint64_t i;
-	uint64_t start_j;
-	uint64_t end_j;
-};
-
 void* row_thread(void* args){
 	float* vector = (((struct row_thread_arg*) args)->vector);
 	const struct graph* g = (((struct row_thread_arg*) args)->g);
@@ -266,7 +179,7 @@ void* row_thread(void* args){
 	return NULL;
 }
 
-inline void distance_row_from_graph(const struct graph* const restrict g, const int32_t i, float* const restrict vector){
+void distance_row_from_graph(const struct graph* const restrict g, const int32_t i, float* const restrict vector){
 	for(uint64_t j = 0 ; j < g->num_nodes ; j++){
 		#if ENABLE_AVX256 == 1
 		vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
@@ -307,14 +220,6 @@ int32_t distance_row_from_graph_multithread(const struct graph* const g, const u
 
 	return 0;
 }
-
-struct batch_row_thread_arg {
-	float* vector;
-	const struct graph* g;
-	uint64_t i;
-	uint64_t start_j;
-	uint64_t end_j;
-};
 
 void* batch_row_thread(void* args){
 	float* vector = (((struct row_thread_arg*) args)->vector);
@@ -387,12 +292,6 @@ int32_t distance_row_batch_from_graph_multithread(const struct graph* const g, c
 	return 0;
 }
 
-struct matrix_thread_arg {
-	struct matrix* m;
-	struct graph* g;
-	uint8_t thread_rank;
-	uint8_t thread_total_count;
-};
 
 void* matrix_thread(void* args){
 	int32_t thread_rank = (int32_t) (((struct matrix_thread_arg*) args)->thread_rank);
@@ -556,20 +455,9 @@ int32_t stats_matrix(struct matrix* m, double* avg_p, double* std_p, double* min
 }
 
 
-enum {
-	GRAPH_NODE_FP32,
-	GRAPH_NODE_FP64
-};
-
 int32_t void_strcmp(const void* a, const void* b){
 	return strcmp((char*) a, (char*) b);
 }
-
-#define GRAPH_NODE_NEIGHBOUR_STEP 64;
-
-#ifndef INITIALIZE_GRAPH_NODE_WITH_RANDOM_VECTOR
-#define INITIALIZE_GRAPH_NODE_WITH_RANDOM_VECTOR 0
-#endif
 
 // int32_t create_graph_node(struct graph_node* restrict node, const int16_t num_dimensions, const int8_t fp_mode){
 int32_t create_graph_node(struct graph_node* restrict node, const uint16_t num_dimensions, const uint8_t fp_mode){
@@ -679,6 +567,7 @@ void free_graph_node(struct graph_node* restrict node, const int8_t fp_mode){
 			break;
 	}
 	free(node->neighbours);
+    pthread_mutex_destroy(&(node->mutex_local_node));
 }
 
 
@@ -694,7 +583,8 @@ int32_t create_graph(struct graph* restrict const g, const int32_t num_nodes, co
 	// g->dist_mat.to_free = 0;
 	g->dist_mat = (struct matrix) { .fp_mode = fp_mode, };
 	g->dist_mat_must_be_freed = 0;
-	pthread_mutex_init(&g->mutex_nodes, NULL);
+	pthread_mutex_init(&(g->mutex_nodes), NULL);
+	pthread_mutex_init(&(g->mutex_matrix), NULL);
 
 	double relative_proportion_sum = 0.0;
 
@@ -800,25 +690,9 @@ int32_t compute_graph_dist_mat(struct graph* const g, const int16_t num_matrix_t
 	return 0;
 }
 
-struct word2vec_entry {
-	char key[WORD2VEC_KEY_BUFFER_SIZE];
-	uint8_t active_in_current_graph;
-	uint64_t num_occurrences;
-	float* vector;
-	struct graph_node* graph_node_pointer;
-	uint64_t graph_node_index;
-};
-
 int32_t word2vec_entry_cmp(const void* restrict a, const void* restrict b){
 	return strcmp(((struct word2vec_entry*) a)->key, ((struct word2vec_entry*) b)->key);
 }
-
-struct word2vec {
-	float* vectors;
-	struct word2vec_entry* keys;
-	uint16_t num_dimensions;
-	uint64_t num_vectors;
-};
 
 int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict path){
 	const int32_t log_bfr_size = 256;
@@ -880,6 +754,10 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 	if(malloc_pointer == NULL){goto malloc_fail;}
 	memset(malloc_pointer, '\0', malloc_size);
 	w2v->keys = (struct word2vec_entry*) malloc_pointer;
+
+    for(uint64_t i = 0 ; i < w2v->num_vectors ; i++){
+        pthread_mutex_init(&(w2v->keys[i].mutex), NULL);
+    }
 
 	uint64_t parsing_key = 1;
 	uint64_t h = 0;
@@ -963,6 +841,9 @@ int32_t load_word2vec_binary(struct word2vec* restrict w2v, const char* restrict
 }
 
 void free_word2vec(struct word2vec* restrict w2v){
+    for(uint64_t i = 0 ; i < w2v->num_vectors ; i++){
+        pthread_mutex_destroy(&(w2v->keys[i].mutex));
+    }
 	free(w2v->vectors);
 	free(w2v->keys);
 }
@@ -1040,19 +921,14 @@ void free_graph(struct graph* restrict g){
 		free(g->nodes[i].neighbours);
 	}
 	free(g->nodes);
+    pthread_mutex_destroy(&(g->mutex_nodes));
 	// if(g->dist_mat != NULL){free(g->dist_mat);}
 	if(g->dist_mat_must_be_freed){
 		free_matrix(&(g->dist_mat));
 		g->dist_mat_must_be_freed = 0;
 	}
+    pthread_mutex_destroy(&(g->mutex_matrix));
 }
-
-struct distance_two_nodes {
-	struct graph_node* a;
-	struct graph_node* b;
-	double distance;
-	int32_t usable;
-};
 
 void create_distance_two_nodes(struct distance_two_nodes* restrict distance, struct graph_node* restrict a, struct graph_node* restrict b, const int8_t fp_mode, const float* const distance_value){
 	if(a < b){
@@ -1081,17 +957,6 @@ void create_distance_two_nodes(struct distance_two_nodes* restrict distance, str
 	}
 	(*distance).usable = 1;
 }
-
-struct graph_distance_heap {
-	struct graph* g;
-	struct distance_two_nodes* distances;
-	uint64_t num_distances;
-};
-
-enum {
-	MIN_HEAP,
-	MAX_HEAP
-};
 
 void siftdown_min_heap(struct graph_distance_heap* restrict heap, const uint64_t current_index){
 	uint64_t child_a_index;
@@ -1133,7 +998,7 @@ void siftdown_min_heap(struct graph_distance_heap* restrict heap, const uint64_t
 
 }
 
-inline int32_t siftdown(struct graph_distance_heap* restrict heap, const int32_t direction, const int64_t current_index){
+int32_t siftdown(struct graph_distance_heap* restrict heap, const int32_t direction, const int64_t current_index){
 	if(direction == MIN_HEAP){
 		siftdown_min_heap(heap, current_index);
 	} else if(direction == MAX_HEAP){
@@ -1303,16 +1168,6 @@ void free_graph_distance_heap(struct graph_distance_heap* heap){
 	free((*heap).distances);
 }
 
-struct minimum_spanning_tree {
-	struct graph_distance_heap* heap;
-	struct distance_two_nodes* distances;
-	uint64_t num_distances;
-	struct graph_node** nodes;
-	uint64_t num_nodes;
-	uint64_t num_active_distances;
-	uint64_t num_active_nodes;
-};
-
 int32_t create_minimum_spanning_tree(struct minimum_spanning_tree* mst, struct graph_distance_heap* heap){
 	size_t malloc_size;
 	void* malloc_pointer;
@@ -1352,10 +1207,6 @@ void free_minimum_spanning_tree(struct minimum_spanning_tree* mst){
 	free((*mst).distances);
 	free((*mst).nodes);
 }
-
-enum {
-	MST_PRIMS_ALGORITHM
-};
 
 int32_t find_minimum_acceptable_arc(struct minimum_spanning_tree* mst, uint64_t current_index, double distance_to_beat, int32_t consider_distance_to_beat){
 	if(consider_distance_to_beat && (*((*mst).heap)).distances[current_index].distance > distance_to_beat){
@@ -1727,44 +1578,6 @@ int32_t functional_divergence_modified_from_graph(struct graph* const g, double*
 
 /* ==== ITERATIVE FUNCTIONS ==== */
 
-struct iterative_state_pairwise_from_graph {
-	int32_t i;
-	int64_t n;
-	double result;
-	struct graph* g;
-	pthread_mutex_t mutex;
-};
-
-struct iterative_state_stirling_from_graph {
-	int32_t i;
-	int64_t n;
-	double alpha;
-	double beta;
-	double result;
-	struct graph* g;
-	pthread_mutex_t mutex;
-};
-
-struct iterative_state_leinster_cobbold_from_graph {
-	int32_t i;
-	int64_t n;
-	double alpha;
-	double hill_number;
-	double entropy;
-	struct graph* g;
-	pthread_mutex_t mutex;
-};
-
-struct thread_args_aggregator {
-	union {
-		struct iterative_state_pairwise_from_graph* const pairwise;
-		struct iterative_state_stirling_from_graph* const stirling;
-		struct iterative_state_leinster_cobbold_from_graph* const leinster_cobbold;
-	} iter_state;
-	int32_t i;
-	const float* const vector;
-};
-
 /* ---- PAIRWISE ---- */
 
 int32_t create_iterative_state_pairwise_from_graph(struct iterative_state_pairwise_from_graph* const restrict iter_state, struct graph* const g){
@@ -2010,12 +1823,6 @@ int32_t pairwise_from_graph(struct graph* const g, double* const result_buffer, 
 
 	return 0;
 }
-
-enum {
-	UD_FORM,
-	UD_LEMMA,
-	UD_MWE
-};
 
 int32_t word2vec_to_graph_fp32(struct graph* g, struct word2vec* w2v, char** cupt_paths, char** cupt_paths_true_positives, int32_t num_cupt_paths, int32_t ud_column){
 	for(uint64_t i = 0 ; i < w2v->num_vectors ; i++){
@@ -3063,5 +2870,3 @@ int32_t nhc_e_q_from_graph(struct graph* const g, double* const res_nhc, double*
 
 	return 0;
 }
-
-#endif

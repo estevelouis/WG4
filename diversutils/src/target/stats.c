@@ -25,11 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef STATS_H
-#define STATS_H
-
-#include<stdint.h>
-#include<math.h>
+#include <stdint.h>
+#include <math.h>
 
 float avg_fp32(const float* p, const int32_t n){
 	float sum = 0.0f;
@@ -95,5 +92,3 @@ void avg_and_std_fp64(const double* p, const int32_t n, double* avg_p, double* s
 	(*std_p) = result;
 }
 
-
-#endif

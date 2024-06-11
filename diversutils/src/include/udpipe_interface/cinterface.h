@@ -14,7 +14,9 @@ extern void udpipe_pipeline_create(const char*, const char*, const char*, const 
 
 extern void udpipe_pipeline_create_global(const char*, const char*, const char*, const char*, const char*);
 
+/*
 extern void udpipe_pipeline_print_global_info();
+*/
 
 extern int32_t udpipe_pipeline_process(const char*, FILE** const, void** const); // in
 

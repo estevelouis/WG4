@@ -1,21 +1,12 @@
-#ifndef CFGPARSER_H
-#define CFGPARSER_H
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
 
-#define BFR_SIZE_READ 1024
-
-struct cfg {
-	char** keys;
-	char** values;
-	uint32_t num_entries;
-};
+#include "cfgparser/parser.h"
 
 int32_t create_cfg_from_file(struct cfg* const c, const char* const path){
-	size_t alloc_size = BFR_SIZE_READ * sizeof(char);
+	size_t alloc_size = CFGPARSER_BFR_SIZE_READ * sizeof(char);
 
 	char* bfr = (char*) malloc(alloc_size);
 	if(bfr == NULL){
@@ -27,6 +18,7 @@ int32_t create_cfg_from_file(struct cfg* const c, const char* const path){
 	FILE* f = fopen(path, "r");
 	if(f == NULL){
 		fprintf(stderr, "failed to open %s\n", path);
+		free(bfr);
 		return 1;
 	}
 
@@ -34,7 +26,7 @@ int32_t create_cfg_from_file(struct cfg* const c, const char* const path){
 	c->values = NULL;
 	c->num_entries = 0;
 
-	while(fgets(bfr, BFR_SIZE_READ, f)){
+	while(fgets(bfr, CFGPARSER_BFR_SIZE_READ, f)){
 		if(bfr[0] == '#' || bfr[0] == '\n' || bfr[0] == '\r'){
 			continue;
 		}
@@ -152,4 +144,3 @@ char* cfg_get_value(const struct cfg* const c, const char* const key){
 	return NULL;
 }
 
-#endif
