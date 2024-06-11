@@ -357,3 +357,12 @@ test_all: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distribut
 	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ALL -o test/test_all test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_all
 
+# ======== formatting ========
+
+format_include:
+	clang-format -i src/include/*.h src/include/*/*.h
+
+format_target:
+	clang-format -i src/target/*.c src/target/*/*.c
+
+format_all: format_include format_target

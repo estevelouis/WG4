@@ -4,10 +4,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-int32_t transform_to_pipes(
-	const char* const raw_text,
-	FILE** pointer_to_output_pipe,
-	char** pointer_to_heap_char
-);
+int32_t transform_to_pipes(const char *const raw_text, FILE **pointer_to_output_pipe, char **pointer_to_heap_char);
 
 #endif

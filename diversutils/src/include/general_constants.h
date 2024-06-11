@@ -31,7 +31,6 @@
 #define PI 3.141592653589793
 #endif
 
-
 #ifndef E
 #define E 2.718281828459045
 #endif
