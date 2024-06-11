@@ -1,9 +1,11 @@
 #ifndef TEST_ENTROPY_H
 #define TEST_ENTROPY_H
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "test_general.h"
 #include "graph.h"

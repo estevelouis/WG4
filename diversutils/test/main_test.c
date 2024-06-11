@@ -6,6 +6,19 @@
 #include "test_entropy.h"
 #include "test_equivalence.h"
 
+#ifdef TEST_ALL
+#define TEST_GRAPH_RELATIVE_PROPORTION
+#define TEST_ENTROPY_SHANNON_WEAVER
+#define TEST_ENTROPY_RENYI
+#define TEST_ENTROPY_PATIL_TAILLIE
+#define TEST_ENTROPY_Q_LOGARITHMIC
+#define TEST_EQUIVALENCE_ENTROPY
+#endif
+
+static int32_t num_calls_info;
+static int32_t num_calls_warning;
+static int32_t num_calls_error;
+
 struct test_case cases[] = {
 	#ifdef TEST_GRAPH_RELATIVE_PROPORTION
 	{test_compute_graph_relative_proportions, 0},
