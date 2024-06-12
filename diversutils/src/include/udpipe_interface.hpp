@@ -1,9 +1,36 @@
+/*
+ *      DiversUtils - Functions to measure diversity
+ *
+ * Copyright (c) 2024  LISN / Université Paris-Saclay / CNRS  Louis Estève (louis.esteve@universite-paris-saclay.fr)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #ifndef UDPIPE_INTERFACE_HPP
 #define UDPIPE_INTERFACE_HPP
 
 #include <iostream>
-#include <string>
 #include <sstream> // std::istringstream
+#include <string>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -11,90 +38,48 @@
 #include "udpipe.h"
 #include "udpipe_interface/size.h"
 
-/*
-std::string& ufal::udpipe::pipeline::get_input(){return input;}
-std::string& ufal::udpipe::pipeline::get_tagger(){return tagger;}
-std::string& ufal::udpipe::pipeline::get_parser(){return parser;}
-std::string& ufal::udpipe::pipeline::get_output(){return output;}
-*/
+static ufal::udpipe::pipeline *global_pipeline;
 
-static ufal::udpipe::pipeline* global_pipeline;
-
-extern "C" void ensure_proper_udpipe_pipeline_size(){
-	if(UDPIPE_PIPELINE_SIZE != sizeof(ufal::udpipe::pipeline)){
-		fprintf(stderr, "UDPIPE_PIPELINE_SIZE != sizeof(ufal::udpipe::pipeline); %i != %li\n", UDPIPE_PIPELINE_SIZE, sizeof(ufal::udpipe::pipeline));
-		exit(1);
-	}
+extern "C" void ensure_proper_udpipe_pipeline_size() {
+  if (UDPIPE_PIPELINE_SIZE != sizeof(ufal::udpipe::pipeline)) {
+    fprintf(stderr, "UDPIPE_PIPELINE_SIZE != sizeof(ufal::udpipe::pipeline); %i != %li\n", UDPIPE_PIPELINE_SIZE,
+            sizeof(ufal::udpipe::pipeline));
+    exit(1);
+  }
 }
 
-/*
-extern "C" void udpipe_pipeline_create(const char* model_name, const char* input, const char* tagger, const char* parser, const char* output, struct udpipe_pipeline* const pointer_pipeline){
-	ufal::udpipe::pipeline local_pipeline(
-		ufal::udpipe::model::load(model_name),
-		std::string(input),
-		std::string(tagger),
-		std::string(parser),
-		std::string(output)
-	);
-
-	std::cout << "input: " << std::string(input) << std::endl;
-	std::cout << "tagger: " << std::string(tagger) << std::endl;
-	std::cout << "parser: " << std::string(parser) << std::endl;
-	std::cout << "output: " << std::string(output) << std::endl;
-
-	std::cout << "get input:" << local_pipeline.get_input() << std::endl;
-
-	memcpy(pointer_pipeline, std::addressof(local_pipeline), sizeof(ufal::udpipe::pipeline));
-}
-*/
-
-extern "C" void udpipe_pipeline_create_global(const char* model_name, const char* input, const char* tagger, const char* parser, const char* output){
-	std::cout << "Creating pipeline with '" << model_name << "'" << std::endl;
-	static ufal::udpipe::pipeline local_pipeline = ufal::udpipe::pipeline(
-		ufal::udpipe::model::load(model_name),
-		std::string(input),
-		std::string(tagger),
-		std::string(parser),
-		std::string(output)
-	);
-	global_pipeline = std::addressof(local_pipeline);
+extern "C" void udpipe_pipeline_create_global(const char *model_name, const char *input, const char *tagger, const char *parser,
+                                              const char *output) {
+  std::cout << "Creating pipeline with '" << model_name << "'" << std::endl;
+  static ufal::udpipe::pipeline local_pipeline = ufal::udpipe::pipeline(
+      ufal::udpipe::model::load(model_name), std::string(input), std::string(tagger), std::string(parser), std::string(output));
+  global_pipeline = std::addressof(local_pipeline);
 }
 
-/*
-extern "C" void udpipe_pipeline_print_global_info(){
-	std::cout << "udpipe_pipeline_print_global_info:" << std::endl;
-	std::cout << "get input:" << global_pipeline->get_input() << std::endl;
-	std::cout << "get tagger:" << global_pipeline->get_tagger() << std::endl;
-	std::cout << "get parser:" << global_pipeline->get_parser() << std::endl;
-	std::cout << "get output:" << global_pipeline->get_output() << std::endl;
-}
-*/
+extern "C" void udpipe_pipeline_process(const char *raw_txt, FILE **const pointer_file, void **const pointer_heap_char) {
+  std::string raw_txt_to_string(raw_txt);
+  std::istringstream iss(raw_txt_to_string);
+  std::ostringstream oss("");
+  std::string error_string;
 
-extern "C" void udpipe_pipeline_process(const char* raw_txt, FILE** const pointer_file, void** const pointer_heap_char){
-	std::string raw_txt_to_string(raw_txt);
-	std::istringstream iss (raw_txt_to_string);
-	// std::cout << "===================================================================\niss:\n" << iss.str() << std::endl;
-	std::ostringstream oss("");
-	std::string error_string;
+  global_pipeline->process(iss, oss, error_string);
 
-	global_pipeline->process(iss, oss, error_string);
+  if (error_string != "") {
+    std::cerr << "error: " << error_string << std::endl;
+    exit(1);
+  }
 
-	if(error_string != ""){
-		std::cerr << "error: " << error_string << std::endl;
-		exit(1);
-	}
+  std::string str_from_oss = oss.str();
+  size_t str_from_oss_length = str_from_oss.length();
 
-	std::string str_from_oss = oss.str();
-	size_t str_from_oss_length = str_from_oss.length();
-	
-	(*pointer_heap_char) = realloc((*pointer_heap_char), (str_from_oss_length + 1) * sizeof(char));
-	if((*pointer_heap_char) == NULL){
-		perror("realloc failed\n");
-		exit(1);
-	}
-	memcpy((*pointer_heap_char), str_from_oss.c_str(), str_from_oss_length);
-	((char*) (*pointer_heap_char))[str_from_oss_length] = '\0';
-	(*pointer_file) = fmemopen((void*) (*pointer_heap_char), str_from_oss_length, "r");
+  (*pointer_heap_char) = realloc((*pointer_heap_char), (str_from_oss_length + 1) * sizeof(char));
+  if ((*pointer_heap_char) == NULL) {
+    perror("realloc failed\n");
+    exit(1);
+  }
+  memcpy((*pointer_heap_char), str_from_oss.c_str(), str_from_oss_length);
+  ((char *)(*pointer_heap_char))[str_from_oss_length] = '\0';
+  (*pointer_file) = fmemopen((void *)(*pointer_heap_char), str_from_oss_length, "r");
 }
 
 #endif

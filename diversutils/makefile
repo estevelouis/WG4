@@ -361,8 +361,10 @@ test_all: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distribut
 
 format_include:
 	clang-format -i src/include/*.h src/include/*/*.h
+	clang-format -i src/include/*.hpp
 
 format_target:
 	clang-format -i src/target/*.c src/target/*/*.c
+	clang-format -i src/target/*.cpp
 
 format_all: format_include format_target

@@ -1,69 +1,80 @@
+/*
+ *      DiversUtils - Functions to measure diversity
+ *
+ * Copyright (c) 2024  LISN / Université Paris-Saclay / CNRS  Louis Estève (louis.esteve@universite-paris-saclay.fr)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <math.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "cupt/parser.h"
 #include "distributions.h"
 #include "graph.h"
+#include "jsonl/parser.h"
 #include "logging.h"
 #include "measurement.h"
 #include "sorted_array/array.h"
 
-int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measurement_configuration *const mcfg,
-                      struct measurement_structure_references *const sref, struct measurement_mutables *const mmut) {
-  struct cupt_sentence_iterator csi = {0};
-  if (create_cupt_sentence_iterator(&csi, filename) != 0) {
-    perror("failed to call create_cupt_sentence_iterator\n");
+int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct measurement_configuration *const mcfg,
+                       struct measurement_structure_references *const sref, struct measurement_mutables *const mmut) {
+  struct jsonl_document_iterator jdi = {0};
+  if (create_jsonl_document_iterator(&jdi, filename, mcfg->jsonl_content_key) != 0) {
+    perror("failed to call create_jsonl_document_iterator\n");
     return 1;
   }
 
   const int32_t log_bfr_size = 256;
   char log_bfr[log_bfr_size];
 
-  if (iterate_cupt_sentence_iterator(&csi) != 0) {
-    perror("failed to call iterate_cupt_sentence_iterator\n");
-    return 1;
-  }
-
   int8_t found_at_least_one_mwe = 0;
-  while (!(csi.file_is_done)) {
-    for (int32_t j = 0; j < csi.current_sentence.num_tokens; j++) {
-      int32_t index;
-      int32_t index_in_discarded = -1;
-      const int32_t key_size = 256;
-      char key[key_size];
-      memset(key, '\0', key_size);
-      size_t len = 0;
-      switch (mcfg->target_column) {
-      case UD_FORM:
-        len = strlen(csi.current_sentence.tokens[j].form);
-        if (len > key_size - 1) {
-          len = key_size - 1;
-        }
-        memcpy(key, csi.current_sentence.tokens[j].form, len);
-        break;
-      case UD_LEMMA:
-        len = strlen(csi.current_sentence.tokens[j].lemma);
-        if (len > key_size - 1) {
-          len = key_size - 1;
-        }
-        memcpy(key, csi.current_sentence.tokens[j].lemma, len);
-        break;
-      default:
-        index = -1;
-        perror("target_column not properly defined\n");
+  while (!(jdi.file_is_done)) {
+    memset(jdi.current_document.identifier, '\0', jdi.current_document.identifier_size); // ?
+    jdi.current_document.identifier_size = 0;
+    memset(jdi.current_document.text, '\0', jdi.current_document.text_size); // ?
+    jdi.current_document.text_size = 0;
+    if (iterate_jsonl_document_iterator(&jdi) != 0) {
+      perror("failed to call iterate_jsonl_document_iterator\n");
+      return 1;
+    }
+    if (jdi.current_document.text_size == 0 || jdi.current_document.identifier_size == 0) {
+      continue;
+    }
+    while (!(jdi.current_document.reached_last_token)) {
+      if (iterate_document_current_token(&(jdi.current_document)) != 0) {
+        perror("failed to call iterate_document_current_token\n");
         return 1;
       }
 
-      index = word2vec_key_to_index(sref->w2v, key);
-
+      // add to graph
+      int32_t index = word2vec_key_to_index(sref->w2v, jdi.current_document.current_token);
       if (index != -1) {
         pthread_mutex_lock(&(sref->w2v->keys[index].mutex));
         if (sref->w2v->keys[index].active_in_current_graph == 0) {
           sref->w2v->keys[index].active_in_current_graph = 1;
-          // num_nodes++;
 
           pthread_mutex_lock(&(sref->g->mutex_nodes));
           if (sref->g->num_nodes == sref->g->capacity) {
@@ -79,7 +90,6 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
           }
           local_node.word2vec_entry_pointer = &(sref->w2v->keys[index]);
           local_node.vector.fp32 = sref->w2v->keys[index].vector;
-
           local_node.num_dimensions = sref->w2v->num_dimensions;
           local_node.already_considered = 0;
           local_node.relative_proportion = 1.0;
@@ -94,19 +104,19 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
           sref->g->nodes[sref->w2v->keys[index].graph_node_index].absolute_proportion++;
           pthread_mutex_unlock(&(sref->g->nodes[sref->w2v->keys[index].graph_node_index].mutex_local_node));
         }
-        sref->w2v->keys[index].num_occurrences++; // ? mutex ?
         pthread_mutex_unlock(&(sref->w2v->keys[index].mutex));
-      } else {
+      } else { // added from cupt
         pthread_mutex_lock(&(sref->sorted_array_discarded_because_not_in_vector_database->mutex));
-        index_in_discarded = key_to_index_sorted_array(sref->sorted_array_discarded_because_not_in_vector_database,
-                                                       key); // before, was in upper level
+        int32_t index_in_discarded =
+            key_to_index_sorted_array(sref->sorted_array_discarded_because_not_in_vector_database,
+                                      jdi.current_document.current_token); // before, was in upper level
         if (index_in_discarded == -1) {
           struct sorted_array_str_int_element elem;
-          size_t bytes_to_cpy = strlen(key);
+          size_t bytes_to_cpy = strlen(jdi.current_document.current_token);
           if (bytes_to_cpy > SORTED_ARRAY_DEFAULT_KEY_SIZE - 1) {
             bytes_to_cpy = SORTED_ARRAY_DEFAULT_KEY_SIZE - 1;
           }
-          memcpy(&elem.key, key, bytes_to_cpy);
+          memcpy(&elem.key, jdi.current_document.current_token, bytes_to_cpy);
           elem.value = 1;
           if (insert_sorted_array(sref->sorted_array_discarded_because_not_in_vector_database, &elem, 0) != 0) {
             perror("failed to call insert_sorted_array\n");
@@ -123,18 +133,11 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
 
     pthread_mutex_lock(&mmut->mutex);
     pthread_mutex_lock(&sref->g->mutex_nodes);
-    // sentence level recomputation
     if ((mcfg->target_column != UD_MWE || found_at_least_one_mwe) &&
-        (mcfg->steps.sentence.enable_count_recompute_step &&
-         (((!mcfg->steps.sentence.use_log10) && mmut->sentence.num % mcfg->steps.sentence.recompute_step == 0) ||
-          (mcfg->steps.sentence.use_log10 && mmut->sentence.num >= mmut->sentence.count_target))) &&
-        sref->g->num_nodes > 1) {
-      // printf("found_at_least_one_mwe: %i; g->num_nodes: %lu\n", found_at_least_one_mwe, sref->g->num_nodes);
-      memset(log_bfr, '\0', log_bfr_size);
-      snprintf(log_bfr, log_bfr_size, "found_at_least_one_mwe: %i; g->num_nodes: %lu", found_at_least_one_mwe,
-               sref->g->num_nodes);
-      info_format(__FILE__, __func__, __LINE__, log_bfr);
-
+        (mcfg->steps.document.enable_count_recompute_step &&
+         (((!mcfg->steps.document.use_log10) && mmut->document.num % mcfg->steps.document.recompute_step == 0) ||
+          (mcfg->steps.document.use_log10 && mmut->document.num >= mmut->document.count_target)) &&
+         sref->g->num_nodes > 1)) {
       compute_graph_relative_proportions(sref->g);
 
       int32_t err = zipfian_fit_from_graph(sref->g, &mmut->best_s);
@@ -161,43 +164,37 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
             mmut->best_s, mmut->prev_best_s, sref->g->num_nodes, mmut->prev_num_nodes);
       }
 
-      if (mcfg->steps.sentence.use_log10) {
-        mmut->sentence.stacked_log += mcfg->steps.sentence.recompute_step_log10;
-        mmut->sentence.count_target = (uint64_t)floor(pow(10.0, mmut->sentence.stacked_log));
+      if (mcfg->steps.document.use_log10) {
+        mmut->document.stacked_log += mcfg->steps.document.recompute_step_log10;
+        mmut->document.count_target = (uint64_t)floor(pow(10.0, mmut->document.stacked_log));
         memset(log_bfr, '\0', log_bfr_size);
-        snprintf(log_bfr, log_bfr_size, "New sentence count target: %lu (10.0^%.3f)", mmut->sentence.count_target,
-                 mmut->sentence.stacked_log);
+        snprintf(log_bfr, log_bfr_size, "New document count target: %lu (10.0^%.3f)", mmut->document.count_target,
+                 mmut->document.stacked_log);
         info_format(__FILE__, __func__, __LINE__, log_bfr);
       }
     }
     pthread_mutex_unlock(&sref->g->mutex_nodes);
 
-    mmut->sentence.num++;
-
+    mmut->document.num++;
     pthread_mutex_unlock(&mmut->mutex);
-
-    if (iterate_cupt_sentence_iterator(&csi) != 0) {
-      perror("failed to call iterate_cupt_sentence_iterator\n");
-      return 1;
-    }
   }
 
-  free_cupt_sentence_iterator(&csi);
+  free_jsonl_document_iterator(&jdi);
 
   return 0;
 
 panic_exit:
 
-  free_cupt_sentence_iterator(&csi);
+  free_jsonl_document_iterator(&jdi);
 
   return 1;
 }
 
-void *cupt_to_graph_thread(void *args) {
-  if (cupt_to_graph(((struct measurement_file_thread *)args)->i, ((struct measurement_file_thread *)args)->filename,
-                    ((struct measurement_file_thread *)args)->mcfg, ((struct measurement_file_thread *)args)->sref,
-                    ((struct measurement_file_thread *)args)->mmut) != 0) {
-    perror("Failed to call cupt_to_graph in cupt_to_graph_thread\n");
+void *jsonl_to_graph_thread(void *args) {
+  if (jsonl_to_graph(((struct measurement_file_thread *)args)->i, ((struct measurement_file_thread *)args)->filename,
+                     ((struct measurement_file_thread *)args)->mcfg, ((struct measurement_file_thread *)args)->sref,
+                     ((struct measurement_file_thread *)args)->mmut) != 0) {
+    perror("Failed to call jsonl_to_graph in jsonl_to_graph_thread\n");
     exit(1);
   }
   return NULL;
