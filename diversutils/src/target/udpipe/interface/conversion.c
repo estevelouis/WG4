@@ -28,10 +28,15 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "udpipe_interface/cinterface.h"
+#include "udpipe/interface/cinterface.h"
 
-int32_t transform_to_pipes(const char *const raw_text, FILE **pointer_to_output_pipe, char **pointer_to_heap_char) {
-  udpipe_pipeline_process(raw_text, pointer_to_output_pipe, (void **)pointer_to_heap_char);
+int32_t transform_to_pipes(
+	const char* const raw_text,
+	FILE** pointer_to_output_pipe,
+	char** pointer_to_heap_char
+){
+	udpipe_pipeline_process(raw_text, pointer_to_output_pipe, (void**) pointer_to_heap_char);
 
-  return 0;
+	return 0;
 }
+

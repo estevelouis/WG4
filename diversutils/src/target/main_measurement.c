@@ -50,7 +50,7 @@
 #include "jsonl/load.h"
 #include "jsonl/parser.h"
 
-#include "udpipe_interface/cinterface.h"
+#include "udpipe/interface/cinterface.h"
 
 #include "macroconfig.h"
 
@@ -789,6 +789,7 @@ int32_t main(int32_t argc, char **argv) {
   int32_t argv_num_row_threads = NUM_ROW_THREADS;
   int32_t argv_num_matrix_threads = NUM_MATRIX_THREADS;
   int32_t argv_num_file_reading_threads = NUM_FILE_READING_THREADS;
+  uint8_t argv_enable_token_utf8_normalisation = ENABLE_TOKEN_UTF8_NORMALISATION;
   uint8_t argv_enable_stirling = ENABLE_STIRLING;
   uint8_t argv_enable_ricotta_szeidl = ENABLE_RICOTTA_SZEIDL;
   uint8_t argv_enable_pairwise = ENABLE_PAIRWISE;
@@ -841,6 +842,7 @@ int32_t main(int32_t argc, char **argv) {
   uint8_t argv_enable_sw_o_bulla1994 = ENABLE_SW_O_BULLA1994;
   uint8_t argv_enable_sw_e_mci_pielou1969 = ENABLE_SW_E_MCI_PIELOU1969;
   uint8_t argv_enable_sw_e_prime_camargo1993 = ENABLE_SW_E_PRIME_CAMARGO1993;
+  uint8_t argv_enable_sw_e_prime_camargo1993_multithreading = ENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING;
   uint8_t argv_enable_sw_e_var_smith_and_wilson1996_original = ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL;
   double argv_stirling_alpha = STIRLING_ALPHA;
   double argv_stirling_beta = STIRLING_BETA;
@@ -911,6 +913,8 @@ int32_t main(int32_t argc, char **argv) {
       argv_enable_output_timing = (argv[i][23] == '1');
     } else if (strncmp(argv[i], "--enable_output_memory=", 23) == 0) {
       argv_enable_output_memory = (argv[i][23] == '1');
+    } else if (strncmp(argv[i], "--enable_token_utf8_normalisation=", 34) == 0) {
+      argv_enable_token_utf8_normalisation = (argv[i][34] == '1');
     } else if (strncmp(argv[i], "--enable_stirling=", 18) == 0) {
       argv_enable_stirling = (argv[i][18] == '1');
     } else if (strncmp(argv[i], "--enable_ricotta_szeidl=", 24) == 0) {
@@ -981,6 +985,8 @@ int32_t main(int32_t argc, char **argv) {
       argv_enable_sw_e_mci_pielou1969 = (argv[i][29] == '1');
     } else if (strncmp(argv[i], "--enable_sw_e_prime_camargo1993=", 32) == 0) {
       argv_enable_sw_e_prime_camargo1993 = (argv[i][32] == '1');
+    } else if (strncmp(argv[i], "--enable_sw_e_prime_camargo1993_multithreading=", 47) == 0) {
+      argv_enable_sw_e_prime_camargo1993_multithreading = (argv[i][47] == '1');
     } else if (strncmp(argv[i], "--enable_sw_e_var_smith_and_wilson1996_original=", 48) == 0) {
       argv_enable_sw_e_var_smith_and_wilson1996_original = (argv[i][48] == '1');
     } else if (strncmp(argv[i], "--stirling_alpha=", 17) == 0) {
@@ -1142,6 +1148,7 @@ int32_t main(int32_t argc, char **argv) {
 #endif
 
   printf("target_column: %u\n", argv_target_column);
+  printf("enable_token_utf8_normalisation: %u\n", argv_enable_token_utf8_normalisation);
   printf("num_row_threads: %i\n", argv_num_row_threads);
   printf("num_matrix_threads: %i\n", argv_num_matrix_threads);
   printf("num_file_reading_threads: %i\n", argv_num_file_reading_threads);
@@ -1151,6 +1158,7 @@ int32_t main(int32_t argc, char **argv) {
   printf("enable_iterative_distance_computation: %u\n", argv_enable_iterative_distance_computation);
   printf("enable_multithreaded_row_generation: %u\n", argv_enable_multithreaded_row_generation);
   printf("row_generation_batch_size: %i\n", argv_row_generation_batch_size);
+  printf("enable_sw_e_prime_camargo1993_multithreading: %u\n", argv_enable_sw_e_prime_camargo1993_multithreading);
   printf("sentence_count_recompute_step: %lu\n", argv_sentence_count_recompute_step);
   printf("enable_sentence_count_recompute_step: %u\n", argv_enable_sentence_count_recompute_step);
   printf("sentence_recompute_step_use_log10: %u\n", argv_sentence_recompute_step_use_log10);
@@ -1235,6 +1243,7 @@ int32_t main(int32_t argc, char **argv) {
 
   struct measurement_configuration mcfg = {
       .target_column = argv_target_column,
+      .enable_token_utf8_normalisation = argv_enable_token_utf8_normalisation,
       .jsonl_content_key = argv_jsonl_content_key,
       .div_param =
           (struct measurement_diversity_parameters){
@@ -1321,6 +1330,7 @@ int32_t main(int32_t argc, char **argv) {
               .enable_iterative_distance_computation = argv_enable_iterative_distance_computation,
               .enable_multithreaded_row_generation = argv_enable_multithreaded_row_generation,
               .row_generation_batch_size = argv_row_generation_batch_size,
+              .enable_sw_e_prime_camargo1993_multithreading = argv_enable_sw_e_prime_camargo1993_multithreading,
           },
       .steps =
           (struct measurement_step_parameters){

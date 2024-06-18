@@ -40,8 +40,8 @@
 #include "sanitize.h"
 #include "sorted_array/array.h"
 #if (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
-#include "udpipe_interface/cinterface.h" // external declarations
-#include "udpipe_interface/conversion.h" // transformation to pipes
+#include "udpipe/interface/cinterface.h" // external declarations
+#include "udpipe/interface/conversion.h" // transformation to pipes
 #endif
 
 #include "jsonl/parser.h"

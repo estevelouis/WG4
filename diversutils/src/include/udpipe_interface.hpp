@@ -34,9 +34,23 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+extern "C" void custom_format(const char *const log_type, const int32_t log_num, const char *const filename,
+                              const char *const func, const int32_t line, const char *const msg);
+extern "C" void error_format(const char *const filename, const char *const func, const int32_t line, const char *const msg);
+extern "C" void warning_format(const char *const filename, const char *const func, const int32_t line, const char *const msg);
+extern "C" void info_format(const char *const filename, const char *const func, const int32_t line, const char *const msg);
 
 #include "udpipe.h"
-#include "udpipe_interface/size.h"
+#include "udpipe/interface/size.h"
+
+#include "udpipe/sources/source.h"
+#include "udpipe/sources/udpipe1/all.h"
+
+#ifndef UDPIPE_STORAGE_DIR
+#define UDPIPE_STORAGE_DIR "$HOME/.local/udpipe/udpipe1/models/"
+#endif
 
 static ufal::udpipe::pipeline *global_pipeline;
 
@@ -48,11 +62,75 @@ extern "C" void ensure_proper_udpipe_pipeline_size() {
   }
 }
 
+extern "C" int32_t ensure_udpipe_model_is_available(const char *const isolang, char *const bfr_p, const size_t bfr_p_size) {
+  size_t n = sizeof(all_udpipe_sources) / sizeof(all_udpipe_sources[0]);
+  for (size_t i = 0; i < n; i++) {
+    if (strcmp(isolang, all_udpipe_sources[i].isolang) == 0) {
+      const int32_t bfr_size = 512;
+      char bfr[bfr_size];
+
+      memset(bfr, '\0', bfr_size);
+      snprintf(bfr, bfr_size, "set -eu ; mkdir -p %s", UDPIPE_STORAGE_DIR);
+      info_format(__FILE__, __func__, __LINE__, bfr);
+      if (system(bfr) != 0) {
+        fprintf(stderr, "Failed to launch \"%s\"\n", bfr);
+        return 1;
+      }
+
+      memset(bfr, '\0', bfr_size);
+      snprintf(bfr, bfr_size, "set -eu ; if ! [ -f \"%s%s\" ] ; then wget --no-clobber -O %s%s %s%s ; fi", UDPIPE_STORAGE_DIR,
+               all_udpipe_sources[i].filename, UDPIPE_STORAGE_DIR, all_udpipe_sources[i].filename,
+               all_udpipe_sources[i].url_download, all_udpipe_sources[i].filename);
+      info_format(__FILE__, __func__, __LINE__, bfr);
+      if (system(bfr) != 0) {
+        fprintf(stderr, "Failed to launch \"%s\"\n", bfr);
+        return 1;
+      }
+
+      memset(bfr, '\0', bfr_size);
+      snprintf(bfr, bfr_size,
+               "set -eu ; cd %s ; md5sum --ignore-missing -c %s/src/include/udpipe/sources/udpipe1/md5_checksums.txt",
+               UDPIPE_STORAGE_DIR, COMPILATION_DIR);
+      info_format(__FILE__, __func__, __LINE__, bfr);
+      if (system(bfr) != 0) {
+        fprintf(stderr, "Failed to launch \"%s\"\n", bfr);
+        return 1;
+      }
+
+      memset(bfr_p, '\0', bfr_p_size);
+      snprintf(bfr_p, bfr_p_size, "%s%s", UDPIPE_STORAGE_DIR, all_udpipe_sources[i].filename);
+
+      return 0;
+    }
+  }
+
+  fprintf(stderr, "Unknown lang: \"%s\"\n", isolang);
+  return 1;
+}
+
 extern "C" void udpipe_pipeline_create_global(const char *model_name, const char *input, const char *tagger, const char *parser,
                                               const char *output) {
-  std::cout << "Creating pipeline with '" << model_name << "'" << std::endl;
+  const size_t bfr_size = 512;
+  char bfr[bfr_size];
+
+  memset(bfr, '\0', bfr_size);
+  snprintf(bfr, bfr_size, "Creating pipeline with \"%s\"", model_name);
+  info_format(__FILE__, __func__, __LINE__, bfr);
+
+  if (strlen(model_name) == 3) {
+    if (ensure_udpipe_model_is_available(model_name, bfr, bfr_size) != 0) {
+      fprintf(stderr, "Failed to call ensure_udpipe_model_is_available for \"%s\"\n", model_name);
+      exit(1);
+    }
+  } else {
+    memset(bfr, '\0', bfr_size);
+    snprintf(bfr, bfr_size, "%s", model_name);
+  }
+
+  info_format(__FILE__, __func__, __LINE__, bfr);
+
   static ufal::udpipe::pipeline local_pipeline = ufal::udpipe::pipeline(
-      ufal::udpipe::model::load(model_name), std::string(input), std::string(tagger), std::string(parser), std::string(output));
+      ufal::udpipe::model::load(bfr), std::string(input), std::string(tagger), std::string(parser), std::string(output));
   global_pipeline = std::addressof(local_pipeline);
 }
 

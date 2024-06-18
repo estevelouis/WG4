@@ -1441,7 +1441,11 @@ int32_t apply_diversity_functions_to_graph(const uint64_t i, struct measurement_
       if (mcfg->enable.sw_e_prime_camargo1993) {
         double res;
         time_t t = time(NULL);
-        sw_e_prime_camargo1993_from_graph(sref->g, &res);
+        if (mcfg->threading.enable_sw_e_prime_camargo1993_multithreading) {
+          sw_e_prime_camargo1993_from_graph_multithread(sref->g, &res, mcfg->threading.num_matrix_threads);
+        } else {
+          sw_e_prime_camargo1993_from_graph(sref->g, &res);
+        }
         time_t delta_t = time(NULL) - t;
         if (mcfg->io.enable_timings) {
           printf("[log] [time] Computed (SW) E prime Camargo 1993 in %lis\n", delta_t);

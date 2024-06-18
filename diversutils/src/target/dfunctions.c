@@ -28,6 +28,8 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "dfunctions.h"
 #include "general_constants.h"
@@ -297,10 +299,89 @@ void sw_e_prime_camargo1993_from_graph(const struct graph *const g, double *cons
       if (val < 0.0) {
         val *= -1.0;
       }
-      sum += val / ((double)g->num_nodes);
+      sum += val;
     }
   }
+  sum /= ((double)g->num_nodes);
   (*res) = 1.0 - sum;
+}
+
+void *sw_e_prime_camargo1993_thread(void *const args) {
+  const int16_t thread_number = ((struct sw_e_prime_camargo1993_thread_args *)args)->thread_number;
+  const int16_t num_threads = ((struct sw_e_prime_camargo1993_thread_args *)args)->num_threads;
+  const struct graph *const g = ((struct sw_e_prime_camargo1993_thread_args *)args)->g;
+
+  double sum_local = 0.0;
+  for (uint64_t i = (uint64_t)thread_number; i < g->num_nodes; i += (uint64_t)num_threads) {
+    for (uint64_t j = i + 1; j < g->num_nodes; j++) {
+      double delta = g->nodes[i].relative_proportion - g->nodes[j].relative_proportion;
+      if (delta < 0.0) {
+        delta = -delta;
+      }
+      sum_local += delta;
+    }
+  }
+  sum_local /= ((double)g->num_nodes);
+
+  ((struct sw_e_prime_camargo1993_thread_args *)args)->sum_local = sum_local;
+
+  return NULL;
+}
+
+int32_t sw_e_prime_camargo1993_from_graph_multithread(const struct graph *g, double *const res, const int16_t num_threads) {
+  double sum = 0.0;
+  const size_t alloc_size_thread_args = num_threads * sizeof(struct sw_e_prime_camargo1993_thread_args);
+
+  struct sw_e_prime_camargo1993_thread_args *const thread_args = malloc(alloc_size_thread_args);
+  if (thread_args == NULL) {
+    goto malloc_failure;
+  }
+  memset(thread_args, '\0', alloc_size_thread_args);
+
+  const size_t alloc_size_threads = num_threads * sizeof(pthread_t);
+  pthread_t *const threads = malloc(alloc_size_threads);
+  if (threads == NULL) {
+    free(thread_args);
+    goto malloc_failure;
+  }
+  memset(threads, '\0', alloc_size_threads);
+
+  for (int16_t thread_number = 0; thread_number < num_threads; thread_number++) {
+    thread_args[thread_number] = (struct sw_e_prime_camargo1993_thread_args){
+        .sum_local = 0.0,
+        .thread_number = thread_number,
+        .num_threads = num_threads,
+        .g = g,
+    };
+
+    if (pthread_create(&threads[thread_number], NULL, sw_e_prime_camargo1993_thread, &thread_args[thread_number]) != 0) {
+      perror("Failed to call pthread_create\n");
+      free(threads);
+      free(thread_args);
+      return 1;
+    }
+  }
+
+  for (int16_t thread_number = 0; thread_number < num_threads; thread_number++) {
+    if (pthread_join(threads[thread_number], NULL) != 0) {
+      perror("Failed to call pthread_join\n");
+      free(threads);
+      free(thread_args);
+      return 1;
+    }
+    sum += thread_args[thread_number].sum_local;
+  }
+
+  *res = 1.0 - sum;
+
+  free(threads);
+  free(thread_args);
+
+  return 0;
+
+malloc_failure:
+  perror("malloc failure\n");
+  return 1;
 }
 
 void sw_e_var_smith_and_wilson1996_original_from_graph(const struct graph *const g, double *const res) {

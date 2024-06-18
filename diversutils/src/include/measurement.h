@@ -116,6 +116,7 @@ struct measurement_threading {
   const uint8_t enable_iterative_distance_computation;
   const uint8_t enable_multithreaded_row_generation;
   const int8_t row_generation_batch_size;
+  const uint8_t enable_sw_e_prime_camargo1993_multithreading;
 };
 
 struct measurement_step {
@@ -133,6 +134,7 @@ struct measurement_step_parameters {
 // !
 struct measurement_configuration {
   const uint32_t target_column;
+  const uint8_t enable_token_utf8_normalisation;
   const char *const jsonl_content_key;
   const struct measurement_diversity_parameters div_param;
   const struct measurement_diversity_enabler enable;

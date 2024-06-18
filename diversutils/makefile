@@ -6,24 +6,52 @@
 # 	make measurement_full
 #
 
+OPT_LEVEL_DEBUG = -O0
+OPT_LEVEL_STANDARD = -O2
+OPT_LEVEL_OPTIM = -O3
+OPT_LEVEL_TEST = -O2
+
+OPT_LEVEL = $(OPT_LEVEL_STANDARD)
+
+ifeq ($(PEDANTIC), 1)
+	PEDANTIC_FLAG = -pedantic -Werror
+endif
+
+ifeq ($(NATIVE), 1)
+	NATIVE_FLAG = -march=native
+endif
+
+ifeq ($(OPTIM), 1)
+	OPT_LEVEL = $(OPT_LEVEL_OPTIM)
+	FAST_MATH_FLAG = -ffast-math
+endif
+
+ifeq ($(DEBUG), 1)
+	DEBUG_FLAG = -DDEBUG -g3
+	OPT_LEVEL = $(OPT_LEVEL_DEBUG)
+else
+	DEBUG_FLAG = -DNDEBUG
+endif
+
+ifeq ($(COMPILER), GNU)
+	CC = gcc
+	CCPP = g++
+	DEBUGGER = gdb
+else
+	CC = clang
+	CCPP = clang++
+	DEBUGGER = lldb
+endif
+
 # -----------------
 # COMPILING OPTIONS
 # -----------------
 
-CC = gcc
-#CC = clang
-CCPP = g++
-#CCPP = clang++
 C_VERSION = -std=c99
-CPP_VERSION = -std=c++11
-CFLAGS_PEDANTIC = -Wall -Wextra -Werror -Wformat -Wformat-security -pedantic -march=native
-CFLAGS_STANDARD = -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_DEBUG = -Wall -Wextra -Wformat -Wformat-security -g3
-CFLAGS_OPTIM = -Wall -Wextra -Wformat -Wformat-security -march=native -ffast-math
-CFLAGS_TEST = -Wall -Wextra -Wformat -Wformat-security -march=native
-CFLAGS_COVERAGE = -Wall -Wextra -Wformat -Wformat-security -march=native --coverage
-CFLAGS_PROFILING = -Wall -Wextra -Wformat -Wformat-security -march=native -pg -g
-CPPFLAGS = -Isrc/include -Iudpipe/src_lib_only -I/usr/include -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
+CXX_VERSION = -std=c++11
+CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
+CPPFLAGS = -Isrc/include -Iudpipe/src_lib_only -I/usr/include
+CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
 CPPFLAGS_TEST = $(CPPFLAGS) -Itest/include
 PATH_LIB_DIVERSUTILS = $(HOME)/.local/lib/diversutils
 LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu
@@ -32,11 +60,6 @@ ifeq ($(origin CONDA_PREFIX), undefined)
 else
 	LDFLAGS = -L$(CONDA_PREFIX)/lib $(LDFLAGS_MINIMUM)
 endif
-OPT_LEVEL = -O2
-OPT_LEVEL_DEBUG = -O0
-OPT_LEVEL_OPTIM = -O3
-OPT_LEVEL_TEST = -O2
-OPT_LEVEL_LINK = -O3
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
 LINKER_FLAGS = -lc -lm -lrt -pthread
 LINKER_FLAGS_EXTRA = -lstdc++ -ludpipe
@@ -103,6 +126,8 @@ ENABLE_SW_E_MCI_PIELOU1969 = 0
 ENABLE_SW_E_PRIME_CAMARGO1993 = 0
 ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL = 0
 
+ENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING = 1
+
 ENABLE_TIMINGS = 0
 ENABLE_ITERATIVE_DISTANCE_COMPUTATION = 0
 ENABLE_MULTITHREADED_ROW_GENERATION = 1
@@ -129,12 +154,14 @@ W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_1
 TARGET_COLUMN = UD_LEMMA
 #TARGET_COLUMN = UD_MWE
 
-# JSONL only
-TOKENIZATION_METHOD = 0 # REGEX
-#TOKENIZATION_METHOD = 1 # UDPipe
-#TOKENIZATION_METHOD = 2 # UDPipe embedded
+ENABLE_TOKEN_UTF8_NORMALISATION = 1
 
-CPP_MACRO_MULTITHREADING = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THREADS=$(NUM_MATRIX_THREADS) -DROW_GENERATION_BATCH_SIZE=$(ROW_GENERATION_BATCH_SIZE) -DNUM_FILE_READING_THREADS=$(NUM_FILE_READING_THREADS) -DENABLE_ITERATIVE_DISTANCE_COMPUTATION=$(ENABLE_ITERATIVE_DISTANCE_COMPUTATION) -DENABLE_MULTITHREADED_ROW_GENERATION=$(ENABLE_MULTITHREADED_ROW_GENERATION) -DENABLE_MULTITHREADED_MATRIX_GENERATION=$(ENABLE_MULTITHREADED_MATRIX_GENERATION) -DENABLE_NON_DISPARITY_MULTITHREADING=$(ENABLE_NON_DISPARITY_MULTITHREADING)
+# JSONL only
+#TOKENIZATION_METHOD = 0 # REGEX
+#TOKENIZATION_METHOD = 1 # UDPipe
+TOKENIZATION_METHOD = 2 # UDPipe embedded
+
+CPP_MACRO_MULTITHREADING = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THREADS=$(NUM_MATRIX_THREADS) -DROW_GENERATION_BATCH_SIZE=$(ROW_GENERATION_BATCH_SIZE) -DNUM_FILE_READING_THREADS=$(NUM_FILE_READING_THREADS) -DENABLE_ITERATIVE_DISTANCE_COMPUTATION=$(ENABLE_ITERATIVE_DISTANCE_COMPUTATION) -DENABLE_MULTITHREADED_ROW_GENERATION=$(ENABLE_MULTITHREADED_ROW_GENERATION) -DENABLE_MULTITHREADED_MATRIX_GENERATION=$(ENABLE_MULTITHREADED_MATRIX_GENERATION) -DENABLE_NON_DISPARITY_MULTITHREADING=$(ENABLE_NON_DISPARITY_MULTITHREADING) -DENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING=$(ENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING)
 
 CPP_MACRO_AVX = -DENABLE_AVX256=$(ENABLE_AVX256)
 
@@ -148,7 +175,7 @@ CPP_MACRO_RECOMPUTE = -DENABLE_SENTENCE_COUNT_RECOMPUTE_STEP=$(ENABLE_SENTENCE_C
 
 CPP_MACRO_IO = -DINPUT_PATH=$(INPUT_PATH) -DOUTPUT_PATH=$(OUTPUT_PATH) -DOUTPUT_PATH_TIMING=$(OUTPUT_PATH_TIMING) -DOUTPUT_PATH_MEMORY=$(OUTPUT_PATH_MEMORY) -DW2V_PATH=$(W2V_PATH)
 
-CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD)
+CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) -DENABLE_TOKEN_UTF8_NORMALISATION=$(ENABLE_TOKEN_UTF8_NORMALISATION) -DCOMPILATION_DIR=\"$(PWD)\"
 
 CPP_MACROS = $(CPP_MACRO_MULTITHREADING) $(CPP_MACRO_AVX) $(CPP_MACRO_DISPARITY) $(CPP_MACRO_NON_DISPARITY) $(CPP_MACRO_TIMING) $(CPP_MACRO_RECOMPUTE) $(CPP_MACRO_IO) $(CPP_MACRO_OTHER)
 
@@ -160,12 +187,6 @@ CPP_MACROS_JSONL = -DTARGET_NUMBER_DOCUMENTS=$(TARGET_NUMBER_DOCUMENTS)
 
 ################
 
-ensure_bin_dir:
-	mkdir -p bin
-
-ensure_build_dir:
-	mkdir -p build
-
 ensure_updated_udpipe:
 	git submodule update --init --recursive udpipe
 
@@ -174,138 +195,98 @@ ensure_prepared_udpipe: ensure_updated_udpipe
 	make --directory=udpipe/src
 	make --directory=udpipe/src_lib_only
 
-share_udpipe:
+$(PATH_LIB_DIVERSUTILS)/libudpipe.so: udpipe/src_lib_only/udpipe.cpp
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
-	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPP_FLAGS) $(OPT_LEVEL_LINK) $(LDFLAGS) -shared -fPIC -o $(PATH_LIB_DIVERSUTILS)/libudpipe.so udpipe/src_lib_only/udpipe.cpp $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $(PATH_LIB_DIVERSUTILS)/libudpipe.so udpipe/src_lib_only/udpipe.cpp $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	export LD_LIBRARY_PATH=$(PATH_LIB_DIVERSUTILS):$$LD_LIBRARY_PATH
-
-obj_udpipe_interface: ensure_bin_dir
-	set -eu
-	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) -o build/udpipe_interface.o -c src/target/udpipe_interface.cpp # ok
-
-obj_measurement: ensure_bin_dir
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) -o build/main_measurement.o -c src/target/main_measurement.c # ok
-
-measurement_link: obj_udpipe_interface cpu dfunctions distributions distances stats graph measurement jsonl_parser jsonl_load cupt_parser cupt_load main_measurement sanitize logging sorted_array udpipe_interface_conversion
-	set -eu
-	$(CCPP) $(CPP_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_LINK) $(CPP_MACROS) $(LDFLAGS) -flto build/udpipe_interface.o build/cpu.o build/dfunctions.o build/distributions.o build/distances.o build/stats.o build/graph.o build/measurement.o build/jsonl_parser.o build/jsonl_load.o build/cupt_parser.o build/cupt_load.o build/main_measurement.o build/sanitize.o build/logging.o build/sorted_array.o build/udpipe_interface_conversion.o -o bin/main_measurement $(LINKER_FLAGS_EXTRA) $(LINKER_FLAGS) # ok?
-
-measurement_full: ensure_prepared_udpipe measurement_link
-
-measurement_standard:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_optim:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_debug:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_DEBUG) $(CPPFLAGS) $(OPT_LEVEL_DEBUG) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_pedantic:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_PEDANTIC) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_coverage:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_COVERAGE) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS)	-o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_profiling:
-	$(CC) --version
-	mkdir -p bin
-	$(CC) $(C_VERSION) $(CFLAGS_PROFILING) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -o bin/main_measurement src/main_measurement.c $(LINKER_FLAGS)
-
-measurement_python_interface:
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(PYTHON_INCLUDE_FLAG) -shared -fPIC -o diversutils.so src/diversutilsmodule.c $(LINKER_FLAGS)
 
 # ======== multi-step build ========
 
-mkdir_bin:
-	set -eu
-	mkdir -p bin
+TGT = src/target
+INC = src/include
+BLD = build
+BIN = bin
 
-mkdir_build:
-	set -eu
-	mkdir -p build
+$(BLD)/.placeholder:
+	set -eu ; mkdir -p build ; touch build/.placeholder
+	set -eu ; mkdir -p build/cupt
+	set -eu ; mkdir -p build/jsonl
+	set -eu ; mkdir -p build/udpipe/interface
 
-cpu: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/cpu.o src/target/cpu.c
+$(BIN)/.placeholder:
+	set -eu ; mkdir -p bin ; touch bin/.placeholder
 
-dfunctions: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/dfunctions.o src/target/dfunctions.c
+$(TGT)/cpu.c: $(INC)/cpu.h
+$(TGT)/graph.c: $(INC)/general_constants.h $(INC)/distances.h $(INC)/cupt/parser.h $(INC)/stats.h $(INC)/logging.h
+$(TGT)/dfunctions.c: $(INC)/dfunctions.h $(INC)/graph.h $(INC)/general_constants.h
+$(TGT)/distances.c: $(INC)/distances.h
+$(TGT)/distributions.c: $(INC)/distributions.h
+$(TGT)/stats.c: $(INC)/stats.h
+$(TGT)/logging.c.c: $(INC)/logging.h
+$(TGT)/measurement.c.c: $(INC)/measurement.h $(INC)/dfunctions.h $(INC)/distributions.h $(INC)/graph.h $(INC)/cpu.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/stats.h
+$(TGT)/sanitize.c: $(INC)/sanitize.h
+$(TGT)/cupt/parser.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h
+$(TGT)/cupt/load.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h $(INC)/cupt/load.h
+$(TGT)/jsonl/parser.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h
+$(TGT)/jsonl/load.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h $(INC)/jsonl/load.h
+$(TGT)/cfgparser/parser.c: $(INC)/cfgparser/parser.h
+$(TGT)/unicode/utf8.c: $(INC)/unicode/unicode.h $(INC)/unicode/utf8.h
+$(TGT)/sorted_array/array.c: $(INC)/sorted_array/array.h $(INC)/sorted_array/constants.h
+$(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
+$(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h
+$(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/macroconfig.h
 
-distances: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/distances.o src/target/distances.c
+$(BLD)/cpu.o: $(TGT)/cpu.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/graph.o: $(TGT)/graph.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/dfunctions.o: $(TGT)/dfunctions.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/distributions.o: $(TGT)/distributions.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/distances.o: $(TGT)/distances.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/stats.o: $(TGT)/stats.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/logging.o: $(TGT)/logging.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/measurement.o: $(TGT)/measurement.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/sanitize.o: $(TGT)/sanitize.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/cupt_parser.o: $(TGT)/cupt/parser.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/cupt_load.o: $(TGT)/cupt/load.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/jsonl_parser.o: $(TGT)/jsonl/parser.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/jsonl_load.o: $(TGT)/jsonl/load.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/sorted_array.o: $(TGT)/sorted_array/array.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/utf8.o: $(TGT)/unicode/utf8.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/cfgparser_parser.o: $(TGT)/cfgparser/parser.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/udpipe_interface.o: $(TGT)/udpipe/interface.cpp
+	$(CCPP) $< $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/udpipe_interface_conversion.o: $(TGT)/udpipe/interface/conversion.c
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+$(BLD)/main_measurement.o: $(TGT)/main_measurement.c makefile
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
 
-distributions: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/distributions.o src/target/distributions.c
+$(BIN)/main_measurement: $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt_parser.o $(BLD)/cupt_load.o $(BLD)/jsonl_parser.o $(BLD)/jsonl_load.o $(BLD)/sorted_array.o $(BLD)/utf8.o $(BLD)/cfgparser_parser.o $(BLD)/udpipe_interface.o $(BLD)/udpipe_interface_conversion.o $(BLD)/main_measurement.o
+	$(CCPP) $^ $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 
-cupt_parser: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/cupt_parser.o src/target/cupt/parser.c
+all: $(BLD)/.placeholder $(BIN)/.placeholder $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(BIN)/main_measurement
 
-cupt_load: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/cupt_load.o src/target/cupt/load.c
+# for backwards compatibility
 
-jsonl_parser: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/jsonl_parser.o src/target/jsonl/parser.c
+measurement_standard: all
 
-jsonl_load: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/jsonl_load.o src/target/jsonl/load.c
+measurement_link: all
 
-sanitize: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/sanitize.o src/target/sanitize.c
-
-graph: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/graph.o src/target/graph.c
-
-measurement: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/measurement.o src/target/measurement.c
-
-logging: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/logging.o src/target/logging.c
-
-stats: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/stats.o src/target/stats.c
-
-sorted_array: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/sorted_array.o src/target/sorted_array/array.c
-
-udpipe_interface_conversion: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/udpipe_interface_conversion.o src/target/udpipe_interface/conversion.c
-
-main_measurement: mkdir_build
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -c -o build/main_measurement.o src/target/main_measurement.c
-
-all_multistep: mkdir_bin cpu dfunctions distances distributions cupt_parser cupt_load jsonl_parser jsonl_load sanitize graph measurement logging stats sorted_array obj_udpipe_interface
-	set -eu
-	$(CC) $(C_VERSION) $(CFLAGS_OPTIM) $(CPPFLAGS) $(OPT_LEVEL_OPTIM) $(CPP_MACROS) -flto -o bin/main_measurement src/target/main_measurement.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/cupt_load.o build/jsonl_parser.o build/jsonl_load.o build/sanitize.o build/graph.o build/measurement.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS)
-
-
+measurement_full: all
 
 # ======== converting jsonl to word2vec format ========
 
@@ -318,43 +299,43 @@ setup_word2vec_learner:
 
 jsonl_to_word2vec_format:
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_STANDARD) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS_JSONL) -o bin/jsonl_to_word2vec_format src/main_jsonl_to_word2vec_format.c $(LINKER_FLAGS)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS_JSONL) -o bin/jsonl_to_word2vec_format src/main_jsonl_to_word2vec_format.c $(LINKER_FLAGS)
 
 # ======== test ========
 
 test_graph_relative_proportion: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_graph_relative_proportion
 
 test_entropy_shannon_weaver: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_entropy_shannon_weaver
 
 test_entropy_renyi: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_entropy_renyi
 
 test_entropy_patil_taillie: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_entropy_patil_taillie
 
 test_entropy_q_logarithmic: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_entropy_q_logarithmic
 
 test_equivalence_entropy: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_equivalence_entropy
 
 test_all: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
 	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS_TEST) $(CPPFLAGS_TEST) $(OPT_LEVEL_TEST) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ALL -o test/test_all test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ALL -o test/test_all test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	./test/test_all
 
 # ======== formatting ========
@@ -365,6 +346,6 @@ format_include:
 
 format_target:
 	clang-format -i src/target/*.c src/target/*/*.c
-	clang-format -i src/target/*.cpp
+	clang-format -i src/target/*/*.cpp
 
 format_all: format_include format_target
