@@ -6,12 +6,22 @@
 # 	make measurement_full
 #
 
-OPT_LEVEL_DEBUG = -O0
+OPT_LEVEL_DEBUG = -Og
 OPT_LEVEL_STANDARD = -O2
 OPT_LEVEL_OPTIM = -O3
 OPT_LEVEL_TEST = -O2
+OPT_LEVEL_COMPACT_STANDARD = -Os
+OPT_LEVEL_COMPACT_OPTIM = -Oz
 
-OPT_LEVEL = $(OPT_LEVEL_STANDARD)
+ifneq ($(VERBOSE), 1)
+    .SILENT:
+endif
+
+ifeq ($(COMPACT), 1)
+	OPT_LEVEL = $(OPT_LEVEL_COMPACT_STANDARD)
+else
+	OPT_LEVEL = $(OPT_LEVEL_STANDARD)
+endif
 
 ifeq ($(PEDANTIC), 1)
 	PEDANTIC_FLAG = -pedantic -Werror
@@ -19,11 +29,34 @@ endif
 
 ifeq ($(NATIVE), 1)
 	NATIVE_FLAG = -march=native
+    ifeq ($(AVX), 0)
+        ENABLE_AVX256 = 0
+        ENABLE_AVX512 = 0
+    else
+    	ifeq ($(grep avx2 /proc/cpuinfo), "")
+    	    ENABLE_AVX256 = 0
+    	else
+    	    ENABLE_AVX256 = 1
+    	endif
+    	
+    	ifeq ($(grep avx512 /proc/cpuinfo), "")
+    	    ENABLE_AVX512 = 0
+    	else
+    	    ENABLE_AVX512 = 1
+    	endif
+    endif
+else
+    ENABLE_AVX256 = 0
+    ENABLE_AVX512 = 0
 endif
 
 ifeq ($(OPTIM), 1)
-	OPT_LEVEL = $(OPT_LEVEL_OPTIM)
 	FAST_MATH_FLAG = -ffast-math
+	ifeq ($(COMPACT), 1)
+		OPT_LEVEL = $(OPT_LEVEL_COMPACT_OPTIM)
+	else
+		OPT_LEVEL = $(OPT_LEVEL_OPTIM)
+	endif
 endif
 
 ifeq ($(DEBUG), 1)
@@ -33,6 +66,7 @@ else
 	DEBUG_FLAG = -DNDEBUG
 endif
 
+
 ifeq ($(COMPILER), GNU)
 	CC = gcc
 	CCPP = g++
@@ -41,6 +75,15 @@ else
 	CC = clang
 	CCPP = clang++
 	DEBUGGER = lldb
+endif
+
+# JSONL only
+#TOKENIZATION_METHOD = 0 # REGEX
+#TOKENIZATION_METHOD = 1 # UDPipe
+TOKENIZATION_METHOD = 2 # UDPipe embedded
+
+ifeq ($(PYTHON_BUILD), 1)
+	TOKENIZATION_METHOD = 0 # REGEX
 endif
 
 # -----------------
@@ -62,7 +105,14 @@ else
 endif
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
 LINKER_FLAGS = -lc -lm -lrt -pthread
-LINKER_FLAGS_EXTRA = -lstdc++ -ludpipe
+LINKER_FLAG_CXX = -lstdc++
+LINKER_FLAG_UDPIPE = -ludpipe
+LINKER_FLAG_DIVERSUTILS = -ldiversutils
+ifeq ($(TOKENIZATION_METHOD), 0)
+	LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX)
+else
+	LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX) $(LINKER_FLAG_UDPIPE)
+endif
 
 # ----------------------
 # UPDATE LD_LIBRARY_PATH
@@ -70,6 +120,10 @@ LINKER_FLAGS_EXTRA = -lstdc++ -ludpipe
 
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(PATH_LIB_DIVERSUTILS)
 
+update_bashrc:
+	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
+	set -eu ; echo "INFO: \033[1mConsider running \"\033[33msource ~/.bashrc\033[0m\033[1m\" if you cannot link against *.so files.\033[0m"
+	
 # ----------------
 # MACRO PARAMETERS
 # ----------------
@@ -81,8 +135,6 @@ ROW_GENERATION_BATCH_SIZE = -1
 NUM_FILE_READING_THREADS = 4
 
 ENABLE_NON_DISPARITY_MULTITHREADING = 1
-
-ENABLE_AVX256 = 0
 
 ENABLE_DISPARITY_FUNCTIONS = 0
 
@@ -156,14 +208,9 @@ TARGET_COLUMN = UD_LEMMA
 
 ENABLE_TOKEN_UTF8_NORMALISATION = 1
 
-# JSONL only
-#TOKENIZATION_METHOD = 0 # REGEX
-#TOKENIZATION_METHOD = 1 # UDPipe
-TOKENIZATION_METHOD = 2 # UDPipe embedded
-
 CPP_MACRO_MULTITHREADING = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THREADS=$(NUM_MATRIX_THREADS) -DROW_GENERATION_BATCH_SIZE=$(ROW_GENERATION_BATCH_SIZE) -DNUM_FILE_READING_THREADS=$(NUM_FILE_READING_THREADS) -DENABLE_ITERATIVE_DISTANCE_COMPUTATION=$(ENABLE_ITERATIVE_DISTANCE_COMPUTATION) -DENABLE_MULTITHREADED_ROW_GENERATION=$(ENABLE_MULTITHREADED_ROW_GENERATION) -DENABLE_MULTITHREADED_MATRIX_GENERATION=$(ENABLE_MULTITHREADED_MATRIX_GENERATION) -DENABLE_NON_DISPARITY_MULTITHREADING=$(ENABLE_NON_DISPARITY_MULTITHREADING) -DENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING=$(ENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING)
 
-CPP_MACRO_AVX = -DENABLE_AVX256=$(ENABLE_AVX256)
+CPP_MACRO_AVX = -DENABLE_AVX256=$(ENABLE_AVX256) -DENABLE_AVX512=$(ENABLE_AVX512)
 
 CPP_MACRO_DISPARITY = -DENABLE_DISPARITY_FUNCTIONS=$(ENABLE_DISPARITY_FUNCTIONS) -DENABLE_STIRLING=$(ENABLE_STIRLING) -DENABLE_RICOTTA_SZEIDL=$(ENABLE_RICOTTA_SZEIDL) -DENABLE_PAIRWISE=$(ENABLE_PAIRWISE) -DENABLE_LEXICOGRAPHIC=$(ENABLE_LEXICOGRAPHIC) -DENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY=$(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY) -DENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY=$(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY) -DENABLE_LEINSTER_COBBOLD_DIVERSITY=$(ENABLE_LEINSTER_COBBOLD_DIVERSITY) -DENABLE_FUNCTIONAL_EVENNESS=$(ENABLE_FUNCTIONAL_EVENNESS) -DENABLE_FUNCTIONAL_DISPERSION=$(ENABLE_FUNCTIONAL_DISPERSION) -DENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED=$(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED)
 
@@ -187,18 +234,9 @@ CPP_MACROS_JSONL = -DTARGET_NUMBER_DOCUMENTS=$(TARGET_NUMBER_DOCUMENTS)
 
 ################
 
-ensure_updated_udpipe:
+udpipe:
+	echo "INFO: Ensuring UDPipe is updated"
 	git submodule update --init --recursive udpipe
-
-ensure_prepared_udpipe: ensure_updated_udpipe
-	set -eu
-	make --directory=udpipe/src
-	make --directory=udpipe/src_lib_only
-
-$(PATH_LIB_DIVERSUTILS)/libudpipe.so: udpipe/src_lib_only/udpipe.cpp
-	mkdir -p $(PATH_LIB_DIVERSUTILS)
-	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $(PATH_LIB_DIVERSUTILS)/libudpipe.so udpipe/src_lib_only/udpipe.cpp $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	export LD_LIBRARY_PATH=$(PATH_LIB_DIVERSUTILS):$$LD_LIBRARY_PATH
 
 # ======== multi-step build ========
 
@@ -206,15 +244,43 @@ TGT = src/target
 INC = src/include
 BLD = build
 BIN = bin
+TST = test
 
-$(BLD)/.placeholder:
-	set -eu ; mkdir -p build ; touch build/.placeholder
-	set -eu ; mkdir -p build/cupt
-	set -eu ; mkdir -p build/jsonl
-	set -eu ; mkdir -p build/udpipe/interface
+udpipe/src_lib_only/udpipe.cpp: udpipe
+	echo "INFO: Ensuring UDPipe is prepared"
+	set -eu ; make -s --directory=udpipe/src
+	set -eu ; make -s --directory=udpipe/src_lib_only
+
+$(PATH_LIB_DIVERSUTILS)/libudpipe.so: udpipe/src_lib_only/udpipe.cpp $(TGT)/udpipe/interface.cpp
+	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
+	mkdir -p $(PATH_LIB_DIVERSUTILS)
+	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
+	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	export LD_LIBRARY_PATH=$(PATH_LIB_DIVERSUTILS):$$LD_LIBRARY_PATH
+
+BLD_DIRECTORIES = $(BLD) $(BLD)/cupt $(BLD)/jsonl $(BLD)/sorted_array $(BLD)/unicode $(BLD)/cfgparser $(BLD)/udpipe/interface
+
+$(BLD_DIRECTORIES): %:
+	set -eu ; echo "INFO: Creating \"\033[1m\033[32m$@\033[0m\""
+	set -eu ; mkdir -p $@
+    
+$(BLD)/.placeholder: $(BLD_DIRECTORIES)
+	set -eu ; if ! [ -f $@ ] ; then touch $@ ; fi
 
 $(BIN)/.placeholder:
-	set -eu ; mkdir -p bin ; touch bin/.placeholder
+	set -eu ; mkdir -p $(BIN) ; touch $@
+
+$(INC)/dfunctions.h: $(INC)/graph.h $(INC)/general_constants.h
+$(INC)/distances.h: $(INC)/graph.h
+$(INC)/distributions.h: $(INC)/graph.h
+$(INC)/measurement.h: $(INC)/graph.h $(INC)/sorted_array/array.h
+$(INC)/cupt/parser.h: $(INC)/cupt/constants.h
+$(INC)/cupt/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
+$(INC)/jsonl/parser.h: $(INC)/jsonl/constants.h
+$(INC)/jsonl/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
+$(INC)/sorted_array/array.h: $(INC)/sorted_array/constants.h
+$(INC)/unicode/utf8.h: $(INC)/unicode/unicode.h
+
 
 $(TGT)/cpu.c: $(INC)/cpu.h
 $(TGT)/graph.c: $(INC)/general_constants.h $(INC)/distances.h $(INC)/cupt/parser.h $(INC)/stats.h $(INC)/logging.h
@@ -233,60 +299,44 @@ $(TGT)/cfgparser/parser.c: $(INC)/cfgparser/parser.h
 $(TGT)/unicode/utf8.c: $(INC)/unicode/unicode.h $(INC)/unicode/utf8.h
 $(TGT)/sorted_array/array.c: $(INC)/sorted_array/array.h $(INC)/sorted_array/constants.h
 $(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
-$(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h
+$(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h $(INC)/udpipe/interface/conversion.h
 $(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/macroconfig.h
 
-$(BLD)/cpu.o: $(TGT)/cpu.c
+DIVERSUTILS_CFILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(TGT)/udpipe/interface/conversion.c
+DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(BLD)/udpipe/interface/conversion.o
+DIVERSUTILS_CXX_OBJECTS = $(BLD)/udpipe/interface.o
+
+$(DIVERSUTILS_C_OBJECTS) $(BLD)/main_measurement.o: $(BLD)/%.o: $(TGT)/%.c $(BLD)/.placeholder
+	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
 	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/graph.o: $(TGT)/graph.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/dfunctions.o: $(TGT)/dfunctions.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/distributions.o: $(TGT)/distributions.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/distances.o: $(TGT)/distances.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/stats.o: $(TGT)/stats.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/logging.o: $(TGT)/logging.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/measurement.o: $(TGT)/measurement.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/sanitize.o: $(TGT)/sanitize.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/cupt_parser.o: $(TGT)/cupt/parser.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/cupt_load.o: $(TGT)/cupt/load.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/jsonl_parser.o: $(TGT)/jsonl/parser.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/jsonl_load.o: $(TGT)/jsonl/load.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/sorted_array.o: $(TGT)/sorted_array/array.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/utf8.o: $(TGT)/unicode/utf8.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/cfgparser_parser.o: $(TGT)/cfgparser/parser.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/udpipe_interface.o: $(TGT)/udpipe/interface.cpp
+$(DIVERSUTILS_CXX_OBJECTS): $(BLD)/%.o: $(TGT)/%.cpp $(BLD)/.placeholder
+	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
 	$(CCPP) $< $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/udpipe_interface_conversion.o: $(TGT)/udpipe/interface/conversion.c
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
-$(BLD)/main_measurement.o: $(TGT)/main_measurement.c makefile
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
 
-$(BIN)/main_measurement: $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt_parser.o $(BLD)/cupt_load.o $(BLD)/jsonl_parser.o $(BLD)/jsonl_load.o $(BLD)/sorted_array.o $(BLD)/utf8.o $(BLD)/cfgparser_parser.o $(BLD)/udpipe_interface.o $(BLD)/udpipe_interface_conversion.o $(BLD)/main_measurement.o
-	$(CCPP) $^ $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(BIN)/main_measurement: $(BIN)/.placeholder $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o update_bashrc
+	echo "INFO: Linking \"\033[1m\033[31m$@\033[0m\" from \"\033[1m\033[32m$(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS)\033[0m\""
+	$(CCPP) $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo "INFO: You may now run \"\033[1m\033[33mcd bin ; ./main_measurement\033[0m\""
 
-all: $(BLD)/.placeholder $(BIN)/.placeholder $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(BIN)/main_measurement
+measurement: $(BLD)/.placeholder $(BIN)/.placeholder $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(BIN)/main_measurement
 
 # for backwards compatibility
 
-measurement_standard: all
+measurement_standard: measurement
+measurement_link: measurement
+measurement_full: measurement
 
-measurement_link: all
+# for Python interface
 
-measurement_full: all
+$(PATH_LIB_DIVERSUTILS)/libdiversutils.so: $(DIVERSUTILS_CFILES)
+	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
+	mkdir -p $(PATH_LIB_DIVERSUTILS)
+	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAG_UDPIPE)
+
+shared_libraries: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(PATH_LIB_DIVERSUTILS)/libdiversutils.so
+
+all: shared_libraries measurement
 
 # ======== converting jsonl to word2vec format ========
 
@@ -303,42 +353,37 @@ jsonl_to_word2vec_format:
 
 # ======== test ========
 
-test_graph_relative_proportion: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_graph_relative_proportion
+$(TST)/include/test_general.h: $(INC)/logging.h
+$(TST)/include/test_entropy.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)/dfunctions.h $(INC)/distances.h
+$(TST)/include/test_equivalence.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)/dfunctions.h $(INC)/distances.h
+$(TST)/include/test_graph.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)/dfunctions.h $(INC)/distances.h
 
-test_entropy_shannon_weaver: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_entropy_shannon_weaver
+$(TST)/main_test.c: $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h
 
-test_entropy_renyi: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_entropy_renyi
+$(TST)/test_all: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ALL -o test/test_all test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_graph_relative_proportion: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_entropy_shannon_weaver: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_entropy_patil_taillie: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_entropy_renyi: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_entropy_q_logarithmic: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+$(TST)/test_equivalence_entropy: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
+	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	
 
-test_entropy_patil_taillie: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_entropy_patil_taillie
-
-test_entropy_q_logarithmic: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_entropy_q_logarithmic
-
-test_equivalence_entropy: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_equivalence_entropy
-
-test_all: ensure_prepared_udpipe share_udpipe cpu dfunctions distances distributions cupt_parser jsonl_parser sanitize graph logging stats sorted_array obj_udpipe_interface
-	$(CC) --version
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DTEST_ALL -o test/test_all test/main_test.c build/cpu.o build/dfunctions.o build/distances.o build/distributions.o build/cupt_parser.o build/jsonl_parser.o build/sanitize.o build/graph.o build/logging.o build/stats.o build/sorted_array.o build/udpipe_interface.o $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	./test/test_all
-
-# ======== formatting ========
+# ======== format ========
 
 format_include:
 	clang-format -i src/include/*.h src/include/*/*.h
@@ -349,3 +394,9 @@ format_target:
 	clang-format -i src/target/*/*.cpp
 
 format_all: format_include format_target
+
+# ======== docs ========
+
+sphinx:
+	sphinx-build -b html docs build/html
+

@@ -29,6 +29,7 @@
 #define UDPIPE_INTERFACE_CINTERFACE_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include "udpipe/interface/size.h"
 
 struct udpipe_pipeline {uint8_t placeholder[UDPIPE_PIPELINE_SIZE];};

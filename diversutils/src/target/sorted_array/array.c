@@ -65,12 +65,11 @@ int32_t create_sorted_array(struct sorted_array *const array, int64_t num_elemen
   if (num_elements > 0) {
     malloc_size = num_elements * element_size;
     array->capacity = num_elements;
-    array->num_elements = num_elements;
   } else {
     malloc_size = SORTED_ARRAY_STEP * element_size;
     array->capacity = SORTED_ARRAY_STEP;
-    array->num_elements = 0;
   }
+  array->num_elements = 0;
   void *malloc_pointer = malloc(malloc_size);
   if (malloc_pointer == NULL) {
     perror("failed to malloc\n");
@@ -102,12 +101,11 @@ int32_t recreate_sorted_array(struct sorted_array *array, int64_t num_elements, 
   if (num_elements > 0) {
     malloc_size = num_elements * element_size;
     array->capacity = num_elements;
-    array->num_elements = num_elements;
   } else {
     malloc_size = SORTED_ARRAY_STEP * element_size;
     array->capacity = SORTED_ARRAY_STEP;
-    array->num_elements = 0;
   }
+  array->num_elements = 0;
   if (malloc_size == 0) {
     printf("new_size == 0\n");
     exit(1);
@@ -220,9 +218,14 @@ int32_t insert_sorted_array(struct sorted_array *array, void *alt, int8_t insert
       }
     } else if (insert_mode == 2) {
       if (index != -1) {
-        memcpy((void *)(((uint64_t)array->bfr) + (index * array->element_size)), alt, array->element_size); // compliance
+        // memcpy((void*) (((uint64_t) array->bfr) + (index * array->element_size)), alt, array->element_size); // compliance
+        // memcpy(((void*) array->bfr) + ((void*) (index * array->element_size)), alt, array->element_size);
+        memcpy(((void *)array->bfr) + (index * array->element_size), alt, array->element_size);
         return 0;
       }
+    } else {
+      fprintf(stderr, "Unknown insert mode: %i\n", insert_mode);
+      return 1;
     }
   }
   if (array->num_elements == array->capacity) {
@@ -232,17 +235,22 @@ int32_t insert_sorted_array(struct sorted_array *array, void *alt, int8_t insert
       perror("failed to realloc\n");
       return 1;
     }
-    memset((void *)(((uint64_t)array->bfr) + (array->capacity * array->element_size)), '\0',
-           SORTED_ARRAY_STEP * array->element_size); // compliance
+    // memset((void*) (((uint64_t) array->bfr) + (array->capacity * array->element_size)), '\0', SORTED_ARRAY_STEP *
+    // array->element_size); // compliance memset(((void*) array->bfr) + ((void*) (array->capacity * array->element_size)),
+    // '\0', SORTED_ARRAY_STEP * array->element_size);
+    memset(((void *)array->bfr) + (array->capacity * array->element_size), '\0', SORTED_ARRAY_STEP * array->element_size);
     array->capacity += SORTED_ARRAY_STEP;
   }
-  memcpy((void *)(((uint64_t)array->bfr) + (array->num_elements * array->element_size)), alt,
-         array->element_size); // compliance
+  // memset(((void*) array->bfr) + (array->num_elements * array->element_size), '\0', array->element_size); // ?
+  // memcpy((void*) (((uint64_t) array->bfr) + (array->num_elements * array->element_size)), alt, array->element_size); //
+  // compliance memcpy(((void*) array->bfr) + ((void*) (array->num_elements * array->element_size)), alt, array->element_size);
+  memcpy(((void *)array->bfr) + (array->num_elements * array->element_size), alt, array->element_size);
   array->num_elements++;
 
   if (array->num_elements - array->num_elements_sorted >= SORTED_ARRAY_UNSORTED_PART_MAX_SIZE) {
     qsort(array->bfr, array->num_elements, array->element_size, array->comp);
-    array->num_elements_sorted = array->element_size;
+    // array->num_elements_sorted = array->element_size;
+    array->num_elements_sorted = array->num_elements;
   }
   // pthread_mutex_unlock(&(array->mutex));
 

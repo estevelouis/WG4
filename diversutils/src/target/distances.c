@@ -27,6 +27,9 @@
 
 #include <math.h>
 #include <stdint.h>
+#if (ENABLE_AVX256 == 1 || ENABLE_AVX512 == 1)
+#include <immintrin.h>
+#endif
 
 // double minkowski_distance(double* restrict a, double* restrict b, int n, double order){
 double minkowski_distance(double *restrict a, double *restrict b, int n, double order) {
@@ -71,7 +74,7 @@ float cosine_distance_norm_fp32(float *restrict a, float *restrict b, int32_t n)
 }
 
 #if ENABLE_AVX256 == 1
-float cosine_distance_fp32_avx(const float *restrict const a, const float *restrict const b, const int32_t n) {
+float cosine_distance_fp32_avx256(const float *restrict const a, const float *restrict const b, const int32_t n) {
   float upper_sum = 0.0;
   float lower_sum_a = 0.0;
   float lower_sum_b = 0.0;
@@ -108,6 +111,60 @@ float cosine_distance_fp32_avx(const float *restrict const a, const float *restr
   _mm256_storeu_ps(vec_lower_sum_b, avx256_lower_sum_b);
 
   for (int32_t j = 0; j < 8; j++) {
+    upper_sum += vec_upper_sum[j];
+    lower_sum_a += vec_lower_sum_a[j];
+    lower_sum_b += vec_lower_sum_b[j];
+  }
+  while (i < n) {
+    upper_sum += a[i] * b[i];
+    lower_sum_a += powf(a[i], 2.0f);
+    lower_sum_b += powf(b[i], 2.0f);
+    i++;
+  }
+  // printf("upper_sum: %f; lower_sum_a: %f; lower_sum_b: %f\n", upper_sum, lower_sum_a, lower_sum_b);
+  float cosine_similarity = (upper_sum / (sqrtf(lower_sum_a) * sqrtf(lower_sum_b)));
+  return (1.0f - cosine_similarity);
+}
+#endif
+
+#if ENABLE_AVX512 == 1
+float cosine_distance_fp32_avx512(const float *restrict const a, const float *restrict const b, const int32_t n) {
+  float upper_sum = 0.0;
+  float lower_sum_a = 0.0;
+  float lower_sum_b = 0.0;
+
+  __m512 avx512_upper_sum = _mm512_setzero_ps();
+  __m512 avx512_lower_sum_a = _mm512_setzero_ps();
+  __m512 avx512_lower_sum_b = _mm512_setzero_ps();
+
+  float vec_upper_sum[16];
+  float vec_lower_sum_a[16];
+  float vec_lower_sum_b[16];
+
+  int32_t i = 0;
+  while (i < n) {
+    __m512 avx512_a = _mm512_loadu_ps(&(a[i])); // had to load unaligned
+    __m512 avx512_b = _mm512_loadu_ps(&(b[i]));
+
+    __m512 avx512_local_upper_sum = _mm512_mul_ps(avx512_a, avx512_b);
+    avx512_upper_sum = _mm512_add_ps(avx512_upper_sum, avx512_local_upper_sum);
+
+    // ----
+
+    __m512 avx512_local_lower_sum_a = _mm512_mul_ps(avx512_a, avx512_a);
+    avx512_lower_sum_a = _mm512_add_ps(avx512_lower_sum_a, avx512_local_lower_sum_a);
+
+    __m512 avx512_local_lower_sum_b = _mm512_mul_ps(avx512_b, avx512_b);
+    avx512_lower_sum_b = _mm512_add_ps(avx512_lower_sum_b, avx512_local_lower_sum_b);
+
+    i += 16;
+  }
+
+  _mm512_storeu_ps(vec_upper_sum, avx512_upper_sum);
+  _mm512_storeu_ps(vec_lower_sum_a, avx512_lower_sum_a);
+  _mm512_storeu_ps(vec_lower_sum_b, avx512_lower_sum_b);
+
+  for (int32_t j = 0; j < 16; j++) {
     upper_sum += vec_upper_sum[j];
     lower_sum_a += vec_lower_sum_a[j];
     lower_sum_b += vec_lower_sum_b[j];

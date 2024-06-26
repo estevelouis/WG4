@@ -25,8 +25,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <errno.h>
 #include <stdio.h>
+extern int pclose(FILE *__stream); // somehow not detected
+
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>

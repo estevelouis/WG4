@@ -128,6 +128,10 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
                                       jdi.current_document.current_token); // before, was in upper level
         if (index_in_discarded == -1) {
           struct sorted_array_str_int_element elem;
+          if (create_sorted_array_str_int_element(&elem) != 0) {
+            perror("failed to call create_sorted_array_str_int_element\n");
+            return 1;
+          }
           size_t bytes_to_cpy = strlen(jdi.current_document.current_token);
           if (bytes_to_cpy > SORTED_ARRAY_DEFAULT_KEY_SIZE - 1) {
             bytes_to_cpy = SORTED_ARRAY_DEFAULT_KEY_SIZE - 1;

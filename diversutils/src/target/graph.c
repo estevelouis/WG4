@@ -146,9 +146,12 @@ int32_t distance_matrix_from_graph(const struct graph *const restrict g, struct 
     for (uint64_t j = i + 1; j < m->b; j++) {
       switch (m->fp_mode) {
       case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
         m->bfr.fp32[i * m->b + j] =
-            (float)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+            (float)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+        m->bfr.fp32[i * m->b + j] =
+            (float)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
         m->bfr.fp32[i * m->b + j] =
             (float)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
@@ -175,8 +178,10 @@ void *row_thread(void *args) {
   uint64_t end_j = ((struct row_thread_arg *)args)->end_j;
 
   for (uint64_t j = start_j; j < end_j; j++) {
-#if ENABLE_AVX256 == 1
-    vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#if ENABLE_AVX512 == 1
+    vector[j] = cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+    vector[j] = cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
     vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -186,8 +191,10 @@ void *row_thread(void *args) {
 
 void distance_row_from_graph(const struct graph *const restrict g, const int32_t i, float *const restrict vector) {
   for (uint64_t j = 0; j < g->num_nodes; j++) {
-#if ENABLE_AVX256 == 1
-    vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#if ENABLE_AVX512 == 1
+    vector[j] = cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+    vector[j] = cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
     vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -235,8 +242,10 @@ void *batch_row_thread(void *args) {
   uint64_t end_j = ((struct row_thread_arg *)args)->end_j;
 
   for (uint64_t j = start_j; j < end_j; j++) {
-#if ENABLE_AVX256 == 1
-    vector[j] = cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#if ENABLE_AVX512 == 1
+    vector[j] = cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+    vector[j] = cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
     vector[j] = cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -316,9 +325,12 @@ void *matrix_thread(void *args) {
     for (uint64_t j = i + 1; j < m->b; j++) {
       switch (m->fp_mode) {
       case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
         m->bfr.fp32[i * m->b + j] =
-            (float)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+            (float)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+        m->bfr.fp32[i * m->b + j] =
+            (float)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
         m->bfr.fp32[i * m->b + j] =
             (float)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
@@ -921,8 +933,12 @@ struct word2vec_entry *word2vec_find_closest(const struct word2vec *restrict w2v
   }
   float distance_best;
 
-#if ENABLE_AVX256 == 1
-  distance_best = cosine_distance_fp32_avx(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+#if ENABLE_AVX512 == 1
+  distance_best =
+      cosine_distance_fp32_avx512(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+#elif ENABLE_AVX256 == 1
+  distance_best =
+      cosine_distance_fp32_avx256(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
 #else
   distance_best = cosine_distance_fp32(w2v->keys[index_best].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
 #endif
@@ -931,8 +947,10 @@ struct word2vec_entry *word2vec_find_closest(const struct word2vec *restrict w2v
       continue;
     }
     float local_distance;
-#if ENABLE_AVX256 == 1
-    local_distance = cosine_distance_fp32_avx(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+#if ENABLE_AVX512 == 1
+    local_distance = cosine_distance_fp32_avx512(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
+#elif ENABLE_AVX256 == 1
+    local_distance = cosine_distance_fp32_avx256(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
 #else
     local_distance = cosine_distance_fp32(w2v->keys[i].vector, w2v->keys[index_target].vector, w2v->num_dimensions);
 #endif
@@ -972,9 +990,12 @@ void create_distance_two_nodes(struct distance_two_nodes *restrict distance, str
   if (distance_value == NULL) {
     switch (fp_mode) {
     case GRAPH_NODE_FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
       distance->distance =
-          cosine_distance_fp32_avx(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t)a->num_dimensions);
+          cosine_distance_fp32_avx512(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t)a->num_dimensions);
+#elif ENABLE_AVX256 == 1
+      distance->distance =
+          cosine_distance_fp32_avx256(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t)a->num_dimensions);
 #else
       distance->distance = cosine_distance_fp32(distance->a->vector.fp32, distance->b->vector.fp32, (int32_t)a->num_dimensions);
 #endif
@@ -1518,8 +1539,11 @@ int32_t functional_dispersion_from_graph(struct graph *const g, double *const re
   for (uint64_t i = 0; i < (*g).num_nodes; i++) {
     switch (fp_mode) {
     case GRAPH_NODE_FP32:
-#if ENABLE_AVX256 == 1
-      result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
+#if ENABLE_AVX512 == 1
+      result += cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
+                g->nodes[i].relative_proportion;
+#elif ENABLE_AVX256 == 1
+      result += cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
                 g->nodes[i].relative_proportion;
 #else
       result += cosine_distance_fp32(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
@@ -1602,9 +1626,13 @@ int32_t functional_divergence_modified_from_graph(struct graph *const g, double 
   for (uint64_t i = 0; i < g->num_nodes; i++) {
     switch (fp_mode) {
     case GRAPH_NODE_FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
       distances_to_centroid[i] =
-          (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
+          (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
+          g->nodes[i].relative_proportion;
+#elif ENABLE_AVX256 == 1
+      distances_to_centroid[i] =
+          (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, centroid.vector.fp32, g->nodes[i].num_dimensions) *
           g->nodes[i].relative_proportion;
 #else
       distances_to_centroid[i] =
@@ -1884,8 +1912,10 @@ int32_t pairwise_from_graph(struct graph *const g, double *const result_buffer, 
       }
       switch (fp_mode) {
       case GRAPH_NODE_FP32:
-#if ENABLE_AVX256 == 1
-        result += cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#if ENABLE_AVX512 == 1
+        result += cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+        result += cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
         result += cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -1952,9 +1982,9 @@ int32_t word2vec_to_graph_fp32(struct graph *g, struct word2vec *w2v, char **cup
       }
     }
     while (!csi.file_is_done) {
-      const int32_t max_mwe = 32;
-      const int32_t max_tokens_per_mwe = 32;
-      const int32_t size_token_mwe = 32;
+      const size_t max_mwe = 32;
+      const size_t max_tokens_per_mwe = 32;
+      const size_t size_token_mwe = 32;
       size_t mwe_bfr_size = max_mwe * max_tokens_per_mwe * size_token_mwe;
       char mwe[mwe_bfr_size];
       memset(mwe, '\0', mwe_bfr_size);
@@ -1976,7 +2006,7 @@ int32_t word2vec_to_graph_fp32(struct graph *g, struct word2vec *w2v, char **cup
           char *strtok_placeholder = NULL;
           strtok_placeholder = strtok(csi.current_sentence.tokens[j].mwe, ";");
           while (strtok_placeholder != NULL) {
-            int64_t mwe_num = strtol(strtok_placeholder, NULL, 10);
+            size_t mwe_num = strtol(strtok_placeholder, NULL, 10);
             if (mwe_num < max_mwe) {
               size_t bytes_to_cpy = strlen(csi.current_sentence.tokens[j].lemma);
               if (bytes_to_cpy > size_token_mwe - 1) {
@@ -2020,7 +2050,7 @@ int32_t word2vec_to_graph_fp32(struct graph *g, struct word2vec *w2v, char **cup
         }
       }
 
-      for (int32_t k = 0; k < max_mwe; k++) {
+      for (size_t k = 0; k < max_mwe; k++) {
         if (mwe_lengths[k] == 0) {
           continue;
         }
@@ -2253,9 +2283,12 @@ int32_t weitzman_from_graph(struct graph *const g, double *const res, const int8
       double distance = 0.0;
       switch (fp_mode) {
       case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
         distance =
-            (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+            (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+        distance =
+            (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
         distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2472,9 +2505,12 @@ int32_t lexicographic_from_graph(struct graph *const g, double *const res, long 
         double distance = 0.0;
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
           distance =
-              (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+              (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance =
+              (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
           distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2524,9 +2560,12 @@ int32_t stirling_from_graph(struct graph *g, double *restrict const result, cons
       } else {
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
           distance =
-              (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+              (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance =
+              (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
           distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2569,9 +2608,12 @@ int32_t ricotta_szeidl_from_graph(struct graph *const g, double *const result, c
       } else {
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
           distance =
-              (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+              (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance =
+              (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
           distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2638,9 +2680,12 @@ int32_t chao_et_al_functional_diversity_from_graph(struct graph *const g, double
       } else {
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
           distance =
-              (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+              (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance =
+              (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
           distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2735,9 +2780,12 @@ int32_t leinster_cobbold_diversity_from_graph(struct graph *const g, double *con
       } else {
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
+#if ENABLE_AVX512 == 1
           distance =
-              (double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+              (double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance =
+              (double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #else
           distance = (double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);
 #endif
@@ -2818,9 +2866,12 @@ int32_t scheiner_species_phylogenetic_functional_diversity_from_graph(struct gra
         // the paper makes use of euclidean distance
         switch (fp_mode) {
         case FP32:
-#if ENABLE_AVX256 == 1
-          distance = (long double)cosine_distance_fp32_avx(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32,
-                                                           g->nodes[i].num_dimensions);
+#if ENABLE_AVX512 == 1
+          distance = (long double)cosine_distance_fp32_avx512(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32,
+                                                              g->nodes[i].num_dimensions);
+#elif ENABLE_AVX256 == 1
+          distance = (long double)cosine_distance_fp32_avx256(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32,
+                                                              g->nodes[i].num_dimensions);
 #else
           distance =
               (long double)cosine_distance_fp32(g->nodes[i].vector.fp32, g->nodes[j].vector.fp32, g->nodes[i].num_dimensions);

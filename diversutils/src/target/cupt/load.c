@@ -58,9 +58,9 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
 
   int8_t found_at_least_one_mwe = 0;
   while (!(csi.file_is_done)) {
-    const int32_t max_mwe = 32;
-    const int32_t max_tokens_per_mwe = 32;
-    const int32_t size_token_mwe = 32;
+    const size_t max_mwe = 32;
+    const size_t max_tokens_per_mwe = 32;
+    const size_t size_token_mwe = 32;
     size_t mwe_bfr_size = max_mwe * max_tokens_per_mwe * size_token_mwe;
     char mwe[mwe_bfr_size];
     memset(mwe, '\0', mwe_bfr_size);
@@ -83,7 +83,7 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
         char *strtok_placeholder = NULL;
         strtok_placeholder = strtok(csi.current_sentence.tokens[j].mwe, ";");
         while (strtok_placeholder != NULL) {
-          int64_t mwe_num = strtol(strtok_placeholder, NULL, 10);
+          size_t mwe_num = (size_t)strtol(strtok_placeholder, NULL, 10);
           if (mwe_num < max_mwe) {
             size_t bytes_to_cpy = strlen(csi.current_sentence.tokens[j].lemma);
             if (bytes_to_cpy > size_token_mwe - 1) {
@@ -109,7 +109,7 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
 
       int32_t index;
       int32_t index_in_discarded = -1;
-      const int32_t key_size = 256;
+      const size_t key_size = 256;
       char key[key_size];
       memset(key, '\0', key_size);
       size_t len = 0;
@@ -196,6 +196,10 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
                                                        key); // before, was in upper level
         if (index_in_discarded == -1) {
           struct sorted_array_str_int_element elem;
+          if (create_sorted_array_str_int_element(&elem) != 0) {
+            perror("failed to call create_sorted_array_str_int_element\n");
+            return 1;
+          }
           size_t bytes_to_cpy = strlen(key);
           if (bytes_to_cpy > SORTED_ARRAY_DEFAULT_KEY_SIZE - 1) {
             bytes_to_cpy = SORTED_ARRAY_DEFAULT_KEY_SIZE - 1;
@@ -218,7 +222,7 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
     // MWE
 
     if (mcfg->target_column == UD_MWE) {
-      for (int32_t k = 0; k < max_mwe; k++) {
+      for (size_t k = 0; k < max_mwe; k++) {
         if (mwe_lengths[k] == 0) {
           continue;
         }
@@ -301,6 +305,10 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
 
           if (index_in_discarded == -1) {
             struct sorted_array_str_int_element elem;
+            if (create_sorted_array_str_int_element(&elem) != 0) {
+              perror("failed to call create_sorted_array_str_int_element\n");
+              return 1;
+            }
             size_t bytes_to_cpy = strlen(bfr);
             if (bytes_to_cpy > SORTED_ARRAY_DEFAULT_KEY_SIZE - 1) {
               bytes_to_cpy = SORTED_ARRAY_DEFAULT_KEY_SIZE - 1;

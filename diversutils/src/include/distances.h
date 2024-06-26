@@ -29,6 +29,9 @@
 #define DISTANCES_H
 
 #include <stdint.h>
+#if (ENABLE_AVX256 == 1 || ENABLE_AVX512 == 1)
+#include <immintrin.h>
+#endif
 
 #include "graph.h" // matrix
 
@@ -37,7 +40,10 @@ float minkowski_distance_fp32(float *restrict a, float *restrict b, int n, float
 float cosine_distance_fp32(const float *restrict const a, const float *restrict const b, const int32_t n);
 float cosine_distance_norm_fp32(float *restrict a, float *restrict b, int32_t n);
 #if ENABLE_AVX256 == 1
-float cosine_distance_fp32_avx(const float *restrict const a, const float *restrict const b, const int32_t n);
+float cosine_distance_fp32_avx256(const float *restrict const a, const float *restrict const b, const int32_t n);
+#endif
+#if ENABLE_AVX512 == 1
+float cosine_distance_fp32_avx512(const float *restrict const a, const float *restrict const b, const int32_t n);
 #endif
 double cosine_distance(const double *restrict const a, const double *restrict const b, const int n);
 double cosine_distance_norm(double *restrict a, double *restrict b, int32_t n);
