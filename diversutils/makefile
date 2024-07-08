@@ -306,7 +306,7 @@ $(PATH_LIB_DIVERSUTILS)/libudpipe.so: $(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_on
 	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
 	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
-	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAGS_CXX)
 	export LD_LIBRARY_PATH=$(PATH_LIB_DIVERSUTILS):$$LD_LIBRARY_PATH
 
 BLD_DIRECTORIES = $(BLD) $(BLD)/cupt $(BLD)/jsonl $(BLD)/sorted_array $(BLD)/unicode $(BLD)/cfgparser $(BLD)/udpipe/interface
