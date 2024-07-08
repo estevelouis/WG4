@@ -32,10 +32,13 @@
 #include "graph.h"
 #include "cfgparser/parser.h"
 
-/*
 #include "measurement.h"
-*/
 #include "dfunctions.h"
+
+#include "cupt/parser.h"
+#include "cupt/load.h"
+#include "jsonl/parser.h"
+#include "jsonl/load.h"
 
 enum {
 	ID_ENTROPY_SHANNON_WEAVER,
@@ -109,6 +112,8 @@ static PyObject* interface_measurement_from_cfg(PyObject* self, PyObject* args){
 */
 
 static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
+    (void) self;
+
 	PyObject* res;
 	size_t alloc_size;
 	int32_t num_nodes;
@@ -155,6 +160,8 @@ static PyObject* interface_create_empty_graph(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_create_graph(PyObject* self, PyObject* args){
+    (void) self;
+
 	PyObject* res;
 	size_t alloc_size;
 	int32_t num_nodes;
@@ -207,6 +214,8 @@ static PyObject* interface_create_graph(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_free_graph(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index;
 
 	if(!PyArg_ParseTuple(args, "i", &index)){
@@ -236,6 +245,8 @@ static PyObject* interface_free_graph(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_free_w2v(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index;
 
 	if(!PyArg_ParseTuple(args, "i", &index)){
@@ -265,6 +276,8 @@ static PyObject* interface_free_w2v(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_load_w2v(PyObject* self, PyObject* args){
+    (void) self;
+
 	char* w2v_path;
 	size_t alloc_size;
 	PyObject* res;
@@ -300,6 +313,8 @@ static PyObject* interface_load_w2v(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index_g, index_w2v;
 
 	if(!PyArg_ParseTuple(args, "ii", &index_g, &index_w2v)){
@@ -319,6 +334,8 @@ static PyObject* interface_bind_w2v(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_add_node(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index;
 	int32_t absolute_proportion;
 	char* key;
@@ -372,6 +389,8 @@ static PyObject* interface_add_node(PyObject* self, PyObject* args){
 }
 
 static PyObject* interface_compute_relative_proportions(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index;
 
 	if(!PyArg_ParseTuple(args, "i", &index)){
@@ -394,7 +413,120 @@ static PyObject* interface_compute_relative_proportions(PyObject* self, PyObject
 	return res;
 }
 
+static PyObject* individual_measure(struct graph * const g, const int32_t id_function, const double alpha, const double beta){
+	double res1, res2;
+	switch(id_function){
+		case ID_ENTROPY_SHANNON_WEAVER:
+			shannon_weaver_entropy_from_graph(g, &res1, &res2);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_ENTROPY_Q_LOGARITHMIC:
+			q_logarithmic_entropy_from_graph(g, &res1, &res2, alpha);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_ENTROPY_PATIL_TAILLIE:
+			patil_taillie_entropy_from_graph(g, &res1, &res2, alpha);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_ENTROPY_RENYI:
+			renyi_entropy_from_graph(g, &res1, &res2, alpha);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_ENTROPY_GOOD:
+			good_entropy_from_graph(g, &res1, alpha, beta);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SIMPSON_DOMINANCE:
+			simpson_dominance_index_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SIMPSON:
+			simpson_index_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_RICHNESS:
+			richness_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SPECIES_COUNT:
+			species_count_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_HILL_EVENNESS:
+			hill_evenness_from_graph(g, &res1, alpha, beta);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_SHANNON_EVENNESS:
+			shannon_evenness_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_BERGER_PARKER:
+			berger_parker_index_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_JUNGE1994_PAGE22:
+			junge1994_page22_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_BRILLOUIN:
+			brillouin_diversity_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_MCINTOSH:
+			mcintosh_index_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_HEIP:
+			sw_e_heip_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_ONE_MINUS_D:
+			sw_e_one_minus_D_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_ONE_OVER_D_WILLIAMS1964:
+			sw_e_one_over_D_williams1964_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_MINUS_LN_D_PIELOU1977:
+			sw_e_minus_ln_D_pielou1977_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_F_2_1_ALATALO1981:
+			sw_f_2_1_alatalo1981_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_G_2_1_MOLINARI1989:
+			sw_g_2_1_molinari1989_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_O_BULLA1994:
+			sw_o_bulla1994_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_BULLA1994:
+			sw_e_bulla1994_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_MCI_PIELOU1969:
+			sw_e_mci_pielou1969_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_PRIME_CAMARGO1993:
+			sw_e_prime_camargo1993_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_INDEX_E_VAR_SMITH_AND_WILSON1996:
+			sw_e_var_smith_and_wilson1996_original_from_graph(g, &res1);
+			return Py_BuildValue("(d)", res1);
+		case ID_DISPARITY_PAIRWISE:
+			pairwise_from_graph(g, &res1, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
+		case ID_DISPARITY_CHAO_ET_AL_FUNCTIONAL:
+			if(chao_et_al_functional_diversity_from_graph(g, &res1, &res2, alpha, FP32, NULL) != 0){
+				perror("failed to call chao_et_al_functional_diversity_from_graph\n");
+				return NULL;
+			}
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_LEINSTER_COBBOLD:
+			leinster_cobbold_diversity_from_graph(g, &res1, &res2, alpha, FP32, NULL);
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_SCHEINER:
+			if(scheiner_species_phylogenetic_functional_diversity_from_graph(g, &res1, &res2, alpha, FP32, NULL) != 0){
+				perror("failed to call scheiner_species_phylogenetic_functional_diversity_from_graph\n");
+				return NULL;
+			}
+			return Py_BuildValue("(dd)", res1, res2);
+		case ID_DISPARITY_STIRLING:
+			stirling_from_graph(g, &res1, alpha, beta, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
+		case ID_DISPARITY_RICOTTA_SZEIDL:
+			ricotta_szeidl_from_graph(g, &res1, alpha, FP32, NULL);
+			return Py_BuildValue("(d)", res1);
+		default:
+			perror("unknown diversity function\n");
+			return NULL;
+	}
+}
+
 static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
+    (void) self;
+
 	int32_t index;
 	int32_t id_function;
 	double alpha = 1.0, beta = 1.0;
@@ -412,6 +544,7 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 		return NULL;
 	}
 	
+    /*
 	double res1, res2;
 	switch(id_function){
 		case ID_ENTROPY_SHANNON_WEAVER:
@@ -520,6 +653,9 @@ static PyObject* interface_individual_measure(PyObject* self, PyObject* args){
 			perror("unknown diversity function\n");
 			return NULL;
 	}
+    */
+
+    return individual_measure(&(global_graphs[index]), id_function, alpha, beta);
 }
 
 /* // DO NOT REMOVE
@@ -552,19 +688,155 @@ static PyObject* interface_cfg_get_value(PyObject* self, PyObject* args){
 }
 */
 
-static PyObject* interface_free_globals(PyObject* self, PyObject* args){
-	if(global_graphs != NULL){free(global_graphs);}
+static PyObject* interface_score_file(PyObject* self, PyObject* args){
+    (void) self;
+
+    /*
+    PyListObject * listFiles;
+    PyListObject * listFunctions;
+    PyListObject * listResults;
+    */
+    PyObject * listFiles;
+    PyObject * listFunctions;
+    PyObject * listResults;
+    int32_t w2v_index = -1;
+    int32_t cardinality_files = 0;
+    int32_t cardinality_functions = 0;
+
+    // if(!PyArg_ParseTuple(args, "O!O!", &PyList_Type, &listFiles, &PyList_Type, &listFunctions)){ // works
+    if(!PyArg_ParseTuple(args, "O!O!i", &PyList_Type, &listFiles, &PyList_Type, &listFunctions, &w2v_index)){
+        fprintf(stderr, "Failed to parse arguments!\n");
+        return NULL;
+    }
+
+    if(PyList_Check(listFiles) != 1 || PyList_Check(listFunctions) != 1){
+        fprintf(stderr, "Both arguments must be lists.\n");
+        return NULL;
+    }
+
+    cardinality_files = PyList_Size(listFiles);
+    cardinality_functions = PyList_Size(listFunctions);
+
+    struct graph g = {0};
+
+    if(create_graph_empty(&g) != 0){
+        fprintf(stderr, "Failed to call create_graph_empty.\n");
+        return NULL;
+    }
+
+    struct sorted_array sorted_array_discarded_because_not_in_vector_database = {0};
+    if(create_sorted_array(&sorted_array_discarded_because_not_in_vector_database, 0, sizeof(struct sorted_array_str_int_element), sorted_array_str_int_cmp) != 0){
+        fprintf(stderr, "Failed to call create_sorted_array.\n");
+        return NULL;
+    }
+
+    for(int32_t i = 0 ; i < cardinality_files ; i++){
+        char * s;
+        // if(!PyArg_ParseTuple(PyList_GetItem(listFiles, i), "s", &s)){
+        if(!PyArg_Parse(PyList_GetItem(listFiles, i), "s", &s)){
+            fprintf(stderr, "Failed to get file name at index %i.\n", i);
+            return NULL;
+        }
+        printf("Processing file %i/%i: %s\n", i, cardinality_files, s);
+
+        struct measurement_configuration mcfg = {
+            .target_column = UD_FORM,
+            .enable_token_utf8_normalisation = 0,
+            .jsonl_content_key = "text",
+            .io = (struct measurement_io) {
+                .input_path = s,
+                .jsonl_content_key = "text",
+            },
+        };
+
+        struct measurement_structure_references sref = {
+            .g = &g,
+            .sorted_array_discarded_because_not_in_vector_database = &sorted_array_discarded_because_not_in_vector_database,
+            .w2v = &(global_word2vecs[w2v_index]),
+        };
+
+        struct measurement_mutables mmut = {0};
+        if(pthread_mutex_init(&mmut.mutex, NULL) != 0){
+            fprintf(stderr, "Failed to call pthread_mutex_init.\n");
+            free_graph(&g);
+            return NULL;
+        }
+
+        size_t len_s = strlen(s);
+
+        if(strcmp(s + len_s - 5, ".cupt") == 0 || strcmp(s + len_s - 7, ".conllu") == 0){
+            if(cupt_to_graph(i, s, &mcfg, &sref, &mmut) != 0){
+                fprintf(stderr, "Failed to call cupt_to_graph for %s.\n", s);
+                pthread_mutex_destroy(&mmut.mutex);
+                free_graph(&g);
+                return NULL;
+            }
+        } else if(strcmp(s + len_s - 6, ".jsonl") == 0){
+            if(jsonl_to_graph(i, s, &mcfg, &sref, &mmut) != 0){
+                fprintf(stderr, "Failed to call jsonl_to_graph for %s.\n", s);
+                pthread_mutex_destroy(&mmut.mutex);
+                free_graph(&g);
+                return NULL;
+            }
+        }
+
+        pthread_mutex_destroy(&mmut.mutex);
+    }
+
+    listResults = PyList_New(cardinality_functions);
+    if(listResults == NULL){
+        fprintf(stderr, "Failed to create a new list.\n");
+        free_graph(&g);
+        return NULL;
+    }
+
+    for(int32_t j = 0 ; j < cardinality_functions ; j++){
+        PyObject * id_function_obj = PyList_GetItem(listFunctions, j);
+        int32_t id_function = -1;
+        if(!PyArg_Parse(id_function_obj, "i", &id_function)){
+            fprintf(stderr, "Failed to transform Python object to int32_t.\n");
+            return NULL;
+        }
+        PyObject * diversity_score = individual_measure(&g, id_function, 1.0, 1.0);
+        if(PyList_SetItem(listResults, j, diversity_score) != 0){
+            fprintf(stderr, "Failed to set diversity score at index %i.\n", j);
+            return NULL;
+        }
+    }
+
+    free_graph(&g);
+
+    return listResults;
+}
+
+void interface_free_globals(void * args){
+    (void) args;
+	if(global_graphs != NULL){
+        for(uint32_t i = 0 ; i < num_graphs ; i++){
+            if(!global_graphs_freed[i]){
+                free_graph(&global_graphs[i]);
+            }
+        }
+        free(global_graphs);
+    }
 	if(global_graphs_freed != NULL){free(global_graphs_freed);}
 	if(global_graphs_word2vec_bindings != NULL){free(global_graphs_word2vec_bindings);}
+	if(global_word2vecs != NULL){
+        for(uint32_t i = 0 ; i < num_w2v ; i++){
+            if(!global_w2v_freed[i]){
+                free_word2vec(&global_word2vecs[i]);
+            }
+        }
+        free(global_word2vecs);
+    }
 	if(global_w2v_freed != NULL){free(global_w2v_freed);}
-	if(global_word2vecs != NULL){free(global_word2vecs);}
 	if(configurations != NULL){free(configurations);}
 
-	return Py_BuildValue("i", 0);
+	// return Py_BuildValue("i", 0);
 }
 
 static PyMethodDef diversutilsmethods[] = {
-	{"__del__", interface_free_globals, METH_VARARGS, "__del__"},
+	// {"__del__", interface_free_globals, METH_VARARGS, "__del__"},
 	{"create_graph", interface_create_graph, METH_VARARGS, "Create a graph. This returns the graph index. ARGS: num_nodes, num_dimensions, config_path."},
 	{"create_empty_graph", interface_create_empty_graph, METH_VARARGS, "Create a an graph. This returns the graph index. ARGS: num_nodes, num_dimensions."},
 	{"free_graph", interface_free_graph, METH_VARARGS, "Free a graph. This requires the graph index."},
@@ -576,6 +848,7 @@ static PyMethodDef diversutilsmethods[] = {
 	{"bind_w2v", interface_bind_w2v, METH_VARARGS, "Bind a Word2Vec binary to a graph. ARGS: graph index, Word2Vec index."},
 	{"load_w2v", interface_load_w2v, METH_VARARGS, "Load a Word2Vec binary. ARGS: Word2Vec index."},
 	{"free_w2v", interface_free_w2v, METH_VARARGS, "Free a Word2Vec binary. ARGS: Word2Vec index."},
+    {"score_file", interface_score_file, METH_VARARGS, "Compute scores for one or more files. ARGS: List of files, list of measures."},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -588,7 +861,8 @@ static struct PyModuleDef diversutilsmodule = {
 	NULL, // PyModuleDef_Slot* m_slots, but NULL if single phase initialisation
 	NULL, // traverseproc m_traverse, "A traversal function to call during GC traversal of the module object, or NULL if not needed"
 	NULL, // inquiry m_clear, "A clear function to call during GC clearing of the module object, or NULL if not needed"
-	NULL, // freefunc m_free, "A function to call during deallocation of the module object, or NULL if not needed"
+	// NULL, // freefunc m_free, "A function to call during deallocation of the module object, or NULL if not needed"
+	interface_free_globals, // freefunc m_free, "A function to call during deallocation of the module object, or NULL if not needed"
 };
 
 PyMODINIT_FUNC PyInit__diversutils(void){

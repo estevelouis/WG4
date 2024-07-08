@@ -4,7 +4,68 @@
 #
 # To compile, run:
 # 	make measurement_full
+# 
+# To include in another makefile, first define DIVERSUTILS_WORK_PATH
 #
+
+ifeq ($(origin DIVERSUTILS_WORK_PATH), undefined)
+    #DIVERSUTILS_WORK_PATH=$(shell pwd)
+    DIVERSUTILS_WORK_PATH=.
+endif
+
+ifneq ($(VERBOSE), 1)
+    .SILENT:
+endif
+
+# -------------
+# CLI arguments
+# -------------
+
+# conformity
+# ----------
+
+ifeq ($(PEDANTIC), 1)
+	PEDANTIC_FLAG = -pedantic -Werror
+endif
+
+# architecture
+# ------------
+
+ifeq ($(NATIVE), 1)
+    $(info $(shell echo "INFO: Building natively (i.e., for current machine only)."))
+	NATIVE_FLAG = -march=native
+    ifeq ($(AVX), 0)
+        $(info $(shell echo "INFO: Ignoring AVX, as it has been set to 0."))
+        ENABLE_AVX256 = 0
+        ENABLE_AVX512 = 0
+    else
+        $(info $(shell echo "INFO: Trying to activate AVX ..."))
+    	ifeq ($(grep avx2 /proc/cpuinfo), "")
+            $(info $(shell echo "INFO: AVX256 \033[1m\033[31mcannot be\033[0m activated."))
+    	    ENABLE_AVX256 = 0
+    	else
+            $(info $(shell echo "INFO: AVX256 \033[1m\033[32mcan be\033[0m activated. Activating."))
+    	    ENABLE_AVX256 = 1
+    	endif
+    	
+    	ifeq ($(grep avx512 /proc/cpuinfo), "")
+            $(info $(shell echo "INFO: AVX512 \033[1m\033[31mcannot be\033[0m activated."))
+    	    ENABLE_AVX512 = 0
+    	else
+            $(info $(shell echo "INFO: AVX512 \033[1m\033[32mcan be\033[0m activated. Activating."))
+    	    ENABLE_AVX512 = 1
+    	endif
+    endif
+else
+    ifeq ($(AVX), 1)
+        $(warning $(shell echo "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
+    endif
+    ENABLE_AVX256 = 0
+    ENABLE_AVX512 = 0
+endif
+
+# optimisation
+# ------------
 
 OPT_LEVEL_DEBUG = -Og
 OPT_LEVEL_STANDARD = -O2
@@ -13,49 +74,18 @@ OPT_LEVEL_TEST = -O2
 OPT_LEVEL_COMPACT_STANDARD = -Os
 OPT_LEVEL_COMPACT_OPTIM = -Oz
 
-ifneq ($(VERBOSE), 1)
-    .SILENT:
-endif
-
-ifeq ($(COMPACT), 1)
-	OPT_LEVEL = $(OPT_LEVEL_COMPACT_STANDARD)
-else
-	OPT_LEVEL = $(OPT_LEVEL_STANDARD)
-endif
-
-ifeq ($(PEDANTIC), 1)
-	PEDANTIC_FLAG = -pedantic -Werror
-endif
-
-ifeq ($(NATIVE), 1)
-	NATIVE_FLAG = -march=native
-    ifeq ($(AVX), 0)
-        ENABLE_AVX256 = 0
-        ENABLE_AVX512 = 0
-    else
-    	ifeq ($(grep avx2 /proc/cpuinfo), "")
-    	    ENABLE_AVX256 = 0
-    	else
-    	    ENABLE_AVX256 = 1
-    	endif
-    	
-    	ifeq ($(grep avx512 /proc/cpuinfo), "")
-    	    ENABLE_AVX512 = 0
-    	else
-    	    ENABLE_AVX512 = 1
-    	endif
-    endif
-else
-    ENABLE_AVX256 = 0
-    ENABLE_AVX512 = 0
-endif
-
 ifeq ($(OPTIM), 1)
 	FAST_MATH_FLAG = -ffast-math
 	ifeq ($(COMPACT), 1)
 		OPT_LEVEL = $(OPT_LEVEL_COMPACT_OPTIM)
 	else
 		OPT_LEVEL = $(OPT_LEVEL_OPTIM)
+	endif
+else
+	ifeq ($(COMPACT), 1)
+		OPT_LEVEL = $(OPT_LEVEL_COMPACT_STANDARD)
+	else
+		OPT_LEVEL = $(OPT_LEVEL_STANDARD)
 	endif
 endif
 
@@ -66,21 +96,44 @@ else
 	DEBUG_FLAG = -DNDEBUG
 endif
 
+# compiler
+# --------
 
 ifeq ($(COMPILER), GNU)
 	CC = gcc
 	CCPP = g++
-	DEBUGGER = gdb
-else
+else ifeq ($(COMPILER), LLVM)
 	CC = clang
 	CCPP = clang++
-	DEBUGGER = lldb
+else ifeq ($(COMPILER), CC)
+	CC = cc
+	CCPP = c++
+else
+    $(info $(shell echo "INFO: Trying to detect compiler ..."))
+    ifneq ($(shell which gcc), "")
+        $(info $(shell echo "INFO: Detected GNU compiler"))
+        CC = gcc
+        CCPP = g++
+    else ifneq ($(shell which clang), "")
+        $(info $(shell echo "INFO: Detected LLVM compiler"))
+        CC = clang
+        CCPP = clang++
+    else ifneq ($(shell which cc), "")
+        $(info $(shell echo "INFO: Detected CC compiler"))
+        CC = cc
+        CCPP = c++
+    endif
 endif
 
+# tokenization
+# ------------
+
 # JSONL only
-#TOKENIZATION_METHOD = 0 # REGEX
-#TOKENIZATION_METHOD = 1 # UDPipe
-TOKENIZATION_METHOD = 2 # UDPipe embedded
+ifeq ($(origin TOKENIZATION_METHOD), undefined)
+    #TOKENIZATION_METHOD = 0 # REGEX
+    #TOKENIZATION_METHOD = 1 # UDPipe
+    TOKENIZATION_METHOD = 2 # UDPipe embedded
+endif
 
 ifeq ($(PYTHON_BUILD), 1)
 	TOKENIZATION_METHOD = 0 # REGEX
@@ -93,9 +146,9 @@ endif
 C_VERSION = -std=c99
 CXX_VERSION = -std=c++11
 CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
-CPPFLAGS = -Isrc/include -Iudpipe/src_lib_only -I/usr/include
+CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include
 CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
-CPPFLAGS_TEST = $(CPPFLAGS) -Itest/include
+CPPFLAGS_TEST = $(CPPFLAGS) -I$(DIVERSUTILS_WORK_PATH)/test/include
 PATH_LIB_DIVERSUTILS = $(HOME)/.local/lib/diversutils
 LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu
 ifeq ($(origin CONDA_PREFIX), undefined)
@@ -121,7 +174,7 @@ endif
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(PATH_LIB_DIVERSUTILS)
 
 update_bashrc:
-	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
+	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
 	set -eu ; echo "INFO: \033[1mConsider running \"\033[33msource ~/.bashrc\033[0m\033[1m\" if you cannot link against *.so files.\033[0m"
 	
 # ----------------
@@ -234,24 +287,22 @@ CPP_MACROS_JSONL = -DTARGET_NUMBER_DOCUMENTS=$(TARGET_NUMBER_DOCUMENTS)
 
 ################
 
-udpipe:
+$(DIVERSUTILS_WORK_PATH)/udpipe:
 	echo "INFO: Ensuring UDPipe is updated"
-	git submodule update --init --recursive udpipe
+	git submodule update --init --recursive $(DIVERSUTILS_WORK_PATH)/udpipe
 
-# ======== multi-step build ========
+TGT = $(DIVERSUTILS_WORK_PATH)/src/target
+INC = $(DIVERSUTILS_WORK_PATH)/src/include
+BLD = $(DIVERSUTILS_WORK_PATH)/build
+BIN = $(DIVERSUTILS_WORK_PATH)/bin
+TST = $(DIVERSUTILS_WORK_PATH)/test
 
-TGT = src/target
-INC = src/include
-BLD = build
-BIN = bin
-TST = test
-
-udpipe/src_lib_only/udpipe.cpp: udpipe
+$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only/udpipe.cpp: $(DIVERSUTILS_WORK_PATH)/udpipe
 	echo "INFO: Ensuring UDPipe is prepared"
 	set -eu ; make -s --directory=udpipe/src
 	set -eu ; make -s --directory=udpipe/src_lib_only
 
-$(PATH_LIB_DIVERSUTILS)/libudpipe.so: udpipe/src_lib_only/udpipe.cpp $(TGT)/udpipe/interface.cpp
+$(PATH_LIB_DIVERSUTILS)/libudpipe.so: $(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only/udpipe.cpp $(TGT)/udpipe/interface.cpp
 	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
 	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
@@ -338,7 +389,9 @@ shared_libraries: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(PATH_LIB_DIVERSUTILS)/l
 
 all: shared_libraries measurement
 
-# ======== converting jsonl to word2vec format ========
+# -----------------------------------
+# converting jsonl to word2vec format
+# -----------------------------------
 
 setup_word2vec_learner:
 	$(CC) --version
@@ -351,7 +404,9 @@ jsonl_to_word2vec_format:
 	$(CC) --version
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS_JSONL) -o bin/jsonl_to_word2vec_format src/main_jsonl_to_word2vec_format.c $(LINKER_FLAGS)
 
-# ======== test ========
+# ----
+# test
+# ----
 
 $(TST)/include/test_general.h: $(INC)/logging.h
 $(TST)/include/test_entropy.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)/dfunctions.h $(INC)/distances.h
@@ -383,7 +438,9 @@ $(TST)/test_equivalence_entropy: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUT
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	
 
-# ======== format ========
+# ------
+# format
+# ------
 
 format_include:
 	clang-format -i src/include/*.h src/include/*/*.h
@@ -395,8 +452,14 @@ format_target:
 
 format_all: format_include format_target
 
-# ======== docs ========
+# ----
+# docs
+# ----
 
 sphinx:
 	sphinx-build -b html docs build/html
+
+man:
+	mkdir -p docs/man
+	rst2man README.rst > docs/man/diversutils.3
 
