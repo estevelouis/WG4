@@ -749,7 +749,7 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
             },
             .threading = (struct measurement_threading) {0},
             .steps = (struct measurement_step_parameters) {0},
-            .div_param = (struct peasurement_diversity_parameters) {0},
+            .div_param = (struct measurement_diversity_parameters) {0},
             .enable = (struct measurement_diversity_enabler) {0}
         };
 
