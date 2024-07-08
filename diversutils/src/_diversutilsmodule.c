@@ -747,12 +747,18 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
                 .input_path = s,
                 .jsonl_content_key = "text",
             },
+            .threading = (struct measurement_threading) {0},
+            .steps = (struct measurement_step_parameters) {0},
+            .div_param = (struct peasurement_diversity_parameters) {0},
+            .enable = (struct measurement_diversity_enabler) {0}
         };
 
         struct measurement_structure_references sref = {
             .g = &g,
             .sorted_array_discarded_because_not_in_vector_database = &sorted_array_discarded_because_not_in_vector_database,
             .w2v = &(global_word2vecs[w2v_index]),
+            .mst = NULL,
+            .heap = NULL,
         };
 
         struct measurement_mutables mmut = {0};
