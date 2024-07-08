@@ -70,7 +70,7 @@ struct jsonl_document_iterator {
   // int64_t offset_end; // excluded
 };
 
-void jsonl_init_tokenization();
+void jsonl_init_tokenization(void);
 
 #if (TOKENIZATION_METHOD == 1 || TOKENIZATION_METHOD == 2)
 int32_t launch_udpipe(struct document *const doc);

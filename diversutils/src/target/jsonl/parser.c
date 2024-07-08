@@ -69,7 +69,7 @@ const char *udpipe_model_directory = "./udpipe/sandbox_models";
 #error "Unknown TOKENIZATION_METHOD"
 #endif
 
-void jsonl_init_tokenization() {
+void jsonl_init_tokenization(void) {
 #if TOKENIZATION_METHOD == 1
   const int32_t bfr_size = 256;
   char bfr[bfr_size];
