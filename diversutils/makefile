@@ -3,15 +3,15 @@
 # ------------------------------
 #
 # To compile, run:
-# 	make measurement_full
+#     make measurement_full
 # 
 # To include in another makefile, first define DIVERSUTILS_WORK_PATH
 #
 
 ifeq ($(origin DIVERSUTILS_WORK_PATH), undefined)
-    #DIVERSUTILS_WORK_PATH=$(shell pwd)
     DIVERSUTILS_WORK_PATH=.
 endif
+$(info $(shell echo "INFO: Building with diversutils at \033[1m\033[35m$(DIVERSUTILS_WORK_PATH)\033[0m."))
 
 ifneq ($(VERBOSE), 1)
     .SILENT:
@@ -25,44 +25,11 @@ endif
 # ----------
 
 ifeq ($(PEDANTIC), 1)
-	PEDANTIC_FLAG = -pedantic -Werror
-endif
-
-# architecture
-# ------------
-
-ifeq ($(NATIVE), 1)
-    $(info $(shell echo "INFO: Building natively (i.e., for current machine only)."))
-	NATIVE_FLAG = -march=native
-    ifeq ($(AVX), 0)
-        $(info $(shell echo "INFO: Ignoring AVX, as it has been set to 0."))
-        ENABLE_AVX256 = 0
-        ENABLE_AVX512 = 0
-    else
-        $(info $(shell echo "INFO: Trying to activate AVX ..."))
-    	ifeq ($(grep avx2 /proc/cpuinfo), "")
-            $(info $(shell echo "INFO: AVX256 \033[1m\033[31mcannot be\033[0m activated."))
-    	    ENABLE_AVX256 = 0
-    	else
-            $(info $(shell echo "INFO: AVX256 \033[1m\033[32mcan be\033[0m activated. Activating."))
-    	    ENABLE_AVX256 = 1
-    	endif
-    	
-    	ifeq ($(grep avx512 /proc/cpuinfo), "")
-            $(info $(shell echo "INFO: AVX512 \033[1m\033[31mcannot be\033[0m activated."))
-    	    ENABLE_AVX512 = 0
-    	else
-            $(info $(shell echo "INFO: AVX512 \033[1m\033[32mcan be\033[0m activated. Activating."))
-    	    ENABLE_AVX512 = 1
-    	endif
-    endif
+    PEDANTIC_FLAG = -pedantic -Werror
 else
-    ifeq ($(AVX), 1)
-        $(warning $(shell echo "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
-    endif
-    ENABLE_AVX256 = 0
-    ENABLE_AVX512 = 0
+    PEDANTIC=0
 endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mPEDANTIC=$(PEDANTIC)\033[0m."))
 
 # optimisation
 # ------------
@@ -74,40 +41,118 @@ OPT_LEVEL_TEST = -O2
 OPT_LEVEL_COMPACT_STANDARD = -Os
 OPT_LEVEL_COMPACT_OPTIM = -Oz
 
-ifeq ($(OPTIM), 1)
-	FAST_MATH_FLAG = -ffast-math
-	ifeq ($(COMPACT), 1)
-		OPT_LEVEL = $(OPT_LEVEL_COMPACT_OPTIM)
-	else
-		OPT_LEVEL = $(OPT_LEVEL_OPTIM)
-	endif
-else
-	ifeq ($(COMPACT), 1)
-		OPT_LEVEL = $(OPT_LEVEL_COMPACT_STANDARD)
-	else
-		OPT_LEVEL = $(OPT_LEVEL_STANDARD)
-	endif
+ifneq ($(COMPACT), 1)
+    COMPACT=0
 endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mCOMPACT=$(COMPACT)\033[0m."))
+
+ifeq ($(OPTIM), 1)
+    FAST_MATH_FLAG = -ffast-math
+    ifeq ($(COMPACT), 1)
+        OPT_LEVEL = $(OPT_LEVEL_COMPACT_OPTIM)
+    else
+        OPT_LEVEL = $(OPT_LEVEL_OPTIM)
+    endif
+else
+    OPTIM=0
+    ifeq ($(COMPACT), 1)
+        OPT_LEVEL = $(OPT_LEVEL_COMPACT_STANDARD)
+    else
+        OPT_LEVEL = $(OPT_LEVEL_STANDARD)
+    endif
+endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mOPTIM=$(OPTIM)\033[0m."))
 
 ifeq ($(DEBUG), 1)
-	DEBUG_FLAG = -DDEBUG -g3
-	OPT_LEVEL = $(OPT_LEVEL_DEBUG)
+    DEBUG_FLAG = -DDEBUG -g3
+    OPT_LEVEL = $(OPT_LEVEL_DEBUG)
 else
-	DEBUG_FLAG = -DNDEBUG
+    DEBUG=0
+    DEBUG_FLAG = -DNDEBUG
+endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mDEBUG=$(DEBUG)\033[0m."))
+
+# tokenization
+# ------------
+
+# JSONL only
+ifeq ($(origin TOKENIZATION_METHOD), undefined)
+    # REGEX
+    #TOKENIZATION_METHOD = 0
+    # UDPipe
+    #TOKENIZATION_METHOD = 1
+    # UDPipe embedded
+    TOKENIZATION_METHOD = 2
+endif
+
+ifeq ($(PYTHON_BUILD), 1)
+    TOKENIZATION_METHOD = 0 # REGEX
+endif
+
+$(info $(shell echo "INFO: Building with \033[1m\033[35mTOKENIZATION_METHOD=$(TOKENIZATION_METHOD)\033[0m."))
+
+# language standard
+# -----------------
+
+C_VERSION = -std=c99
+ifeq ($(LEGACY_COMPILER), 1)
+    CXX_VERSION = -std=c++0x
+else
+    LEGACY_COMPILER = 0
+    CXX_VERSION = -std=c++11
+endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mLEGACY_COMPILER=$(LEGACY_COMPILER)\033[0m."))
+
+# architecture
+# ------------
+
+ifeq ($(NATIVE), 1)
+    $(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m (i.e., for current machine only)."))
+    NATIVE_FLAG = -march=native
+    ifeq ($(AVX), 0)
+        $(info $(shell echo "INFO: Ignoring AVX, as it has been set to 0."))
+        ENABLE_AVX256 = 0
+        ENABLE_AVX512 = 0
+    else
+        $(info $(shell echo "INFO: Trying to activate AVX ..."))
+        ifeq ($(grep avx2 /proc/cpuinfo), "")
+            $(info $(shell echo "INFO: AVX256 \033[1m\033[31mcannot be\033[0m activated."))
+            ENABLE_AVX256 = 0
+        else
+            $(info $(shell echo "INFO: AVX256 \033[1m\033[32mcan be\033[0m activated. Activating."))
+            ENABLE_AVX256 = 1
+        endif
+        
+        ifeq ($(grep avx512 /proc/cpuinfo), "")
+            $(info $(shell echo "INFO: AVX512 \033[1m\033[31mcannot be\033[0m activated."))
+            ENABLE_AVX512 = 0
+        else
+            $(info $(shell echo "INFO: AVX512 \033[1m\033[32mcan be\033[0m activated. Activating."))
+            ENABLE_AVX512 = 1
+        endif
+    endif
+else
+    NATIVE=0
+    $(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m."))
+    ifeq ($(AVX), 1)
+        $(warning $(shell echo "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
+    endif
+    ENABLE_AVX256 = 0
+    ENABLE_AVX512 = 0
 endif
 
 # compiler
 # --------
 
 ifeq ($(COMPILER), GNU)
-	CC = gcc
-	CCPP = g++
+    CC = gcc
+    CCPP = g++
 else ifeq ($(COMPILER), LLVM)
-	CC = clang
-	CCPP = clang++
+    CC = clang
+    CCPP = clang++
 else ifeq ($(COMPILER), CC)
-	CC = cc
-	CCPP = c++
+    CC = cc
+    CCPP = c++
 else
     $(info $(shell echo "INFO: Trying to detect compiler ..."))
     ifneq ($(shell which gcc), "")
@@ -125,26 +170,10 @@ else
     endif
 endif
 
-# tokenization
-# ------------
-
-# JSONL only
-ifeq ($(origin TOKENIZATION_METHOD), undefined)
-    #TOKENIZATION_METHOD = 0 # REGEX
-    #TOKENIZATION_METHOD = 1 # UDPipe
-    TOKENIZATION_METHOD = 2 # UDPipe embedded
-endif
-
-ifeq ($(PYTHON_BUILD), 1)
-	TOKENIZATION_METHOD = 0 # REGEX
-endif
-
 # -----------------
 # COMPILING OPTIONS
 # -----------------
 
-C_VERSION = -std=c99
-CXX_VERSION = -std=c++11
 CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
 CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include
 CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
@@ -152,9 +181,9 @@ CPPFLAGS_TEST = $(CPPFLAGS) -I$(DIVERSUTILS_WORK_PATH)/test/include
 PATH_LIB_DIVERSUTILS = $(HOME)/.local/lib/diversutils
 LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu
 ifeq ($(origin CONDA_PREFIX), undefined)
-	LDFLAGS = $(LDFLAGS_MINIMUM)
+    LDFLAGS = $(LDFLAGS_MINIMUM)
 else
-	LDFLAGS = -L$(CONDA_PREFIX)/lib $(LDFLAGS_MINIMUM)
+    LDFLAGS = -L$(CONDA_PREFIX)/lib $(LDFLAGS_MINIMUM)
 endif
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
 LINKER_FLAGS = -lc -lm -lrt -pthread
@@ -162,9 +191,9 @@ LINKER_FLAG_CXX = -lstdc++
 LINKER_FLAG_UDPIPE = -ludpipe
 LINKER_FLAG_DIVERSUTILS = -ldiversutils
 ifeq ($(TOKENIZATION_METHOD), 0)
-	LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX)
+    LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX)
 else
-	LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX) $(LINKER_FLAG_UDPIPE)
+    LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX) $(LINKER_FLAG_UDPIPE)
 endif
 
 # ----------------------
@@ -291,8 +320,9 @@ $(DIVERSUTILS_WORK_PATH)/udpipe:
 	echo "INFO: Ensuring UDPipe is updated"
 	git submodule update --init --recursive $(DIVERSUTILS_WORK_PATH)/udpipe
 
-TGT = $(DIVERSUTILS_WORK_PATH)/src/target
-INC = $(DIVERSUTILS_WORK_PATH)/src/include
+SRC = $(DIVERSUTILS_WORK_PATH)/src
+TGT = $(SRC)/target
+INC = $(SRC)/include
 BLD = $(DIVERSUTILS_WORK_PATH)/build
 BIN = $(DIVERSUTILS_WORK_PATH)/bin
 TST = $(DIVERSUTILS_WORK_PATH)/test
@@ -353,9 +383,16 @@ $(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
 $(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h $(INC)/udpipe/interface/conversion.h
 $(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/macroconfig.h
 
-DIVERSUTILS_CFILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(TGT)/udpipe/interface/conversion.c
-DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(BLD)/udpipe/interface/conversion.o
-DIVERSUTILS_CXX_OBJECTS = $(BLD)/udpipe/interface.o
+ifneq ($(TOKENIZATION_METHOD), 0)
+	$(info INFO: Adding UDPipe elements to requirements)
+    DIVERSUTILS_TOKENIZATION_C_FILES = $(TGT)/udpipe/interface/conversion.c
+    DIVERSUTILS_TOKENIZATION_C_OBJECTS = $(BLD)/udpipe/interface/conversion.o
+    DIVERSUTILS_TOKENIZATION_CXX_OBJECTS = $(BLD)/udpipe/interface.o
+endif
+
+DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
+DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
+DIVERSUTILS_CXX_OBJECTS = $(DIVERSUTILS_TOKENIZATION_CXX_OBJECTS)
 
 $(DIVERSUTILS_C_OBJECTS) $(BLD)/main_measurement.o: $(BLD)/%.o: $(TGT)/%.c $(BLD)/.placeholder
 	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
@@ -367,7 +404,7 @@ $(DIVERSUTILS_CXX_OBJECTS): $(BLD)/%.o: $(TGT)/%.cpp $(BLD)/.placeholder
 $(BIN)/main_measurement: $(BIN)/.placeholder $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o update_bashrc
 	echo "INFO: Linking \"\033[1m\033[31m$@\033[0m\" from \"\033[1m\033[32m$(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS)\033[0m\""
 	$(CCPP) $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	echo "INFO: You may now run \"\033[1m\033[33mcd bin ; ./main_measurement\033[0m\""
+	echo "INFO: You may now run \"\033[1m\033[33mcd $(BIN) ; ./main_measurement\033[0m\""
 
 measurement: $(BLD)/.placeholder $(BIN)/.placeholder $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(BIN)/main_measurement
 
@@ -377,17 +414,25 @@ measurement_standard: measurement
 measurement_link: measurement
 measurement_full: measurement
 
-# for Python interface
+all: shared_libraries measurement
 
-$(PATH_LIB_DIVERSUTILS)/libdiversutils.so: $(DIVERSUTILS_CFILES)
+# ----------------
+# Python interface
+# ----------------
+
+$(PATH_LIB_DIVERSUTILS)/libdiversutils.so: $(DIVERSUTILS_C_FILES)
 	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
 	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAG_UDPIPE)
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS)
+
+DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(TGT)/measurement.c $(TGT)/dfunctions.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/logging.c $(TGT)/distances.c $(TGT)/stats.c $(TGT)/sanitize.c $(TGT)/unicode/utf8.c $(TGT)/distributions.c $(TGT)/cpu.c
+
+$(BLD)/_diversutilsmodule.c: $(DIVERSUTILS_C_FILES_PYTHON_BUNDLE) $(BLD)
+	cat $(SRC)/_diversutilsmodule.c > $@
+	for f in $^ ; do cat $$f >> $@ ; done
 
 shared_libraries: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(PATH_LIB_DIVERSUTILS)/libdiversutils.so
-
-all: shared_libraries measurement
 
 # -----------------------------------
 # converting jsonl to word2vec format
@@ -415,25 +460,25 @@ $(TST)/include/test_graph.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)
 
 $(TST)/main_test.c: $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h
 
-$(TST)/test_all: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
+$(TST)/test_all: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ALL -o test/test_all test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_graph_relative_proportion: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/main_test.c
+$(TST)/test_graph_relative_proportion: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_entropy_shannon_weaver: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+$(TST)/test_entropy_shannon_weaver: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_entropy_patil_taillie: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+$(TST)/test_entropy_patil_taillie: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_entropy_renyi: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+$(TST)/test_entropy_renyi: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_entropy_q_logarithmic: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
+$(TST)/test_entropy_q_logarithmic: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-$(TST)/test_equivalence_entropy: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
+$(TST)/test_equivalence_entropy: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
 	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	

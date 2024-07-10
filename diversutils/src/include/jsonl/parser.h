@@ -66,6 +66,9 @@ struct jsonl_document_iterator {
   char content_key[JSONL_CONTENT_KEY_BUFFER_SIZE];
   struct document current_document;
   int32_t document_to_free;
+  char *current_line;
+  size_t current_line_cardinality;
+  size_t current_line_capacity;
   // int64_t offset_start; // included
   // int64_t offset_end; // excluded
 };
@@ -83,5 +86,6 @@ int32_t create_jsonl_document_iterator(struct jsonl_document_iterator *jdi, cons
                                        const char *const content_key);
 void free_jsonl_document_iterator(struct jsonl_document_iterator *jdi);
 int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator *restrict const jdi);
+int32_t jsonl_document_iterator_request_more_capacity_current_line(struct jsonl_document_iterator *const jdi);
 
 #endif

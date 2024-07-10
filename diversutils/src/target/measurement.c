@@ -25,9 +25,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef _POSIX_C_SOURCE
 // for clock_gettime in time.h: https://stackoverflow.com/questions/69145941/why-does-clock-gettime-not-compile-when-using-c99
 // #define _POSIX_C_SOURCE >= 199309L
 #define _POSIX_C_SOURCE 199309L
+#endif
 
 #include <time.h>
 

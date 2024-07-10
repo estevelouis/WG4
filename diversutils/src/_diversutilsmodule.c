@@ -40,6 +40,12 @@
 #include "jsonl/parser.h"
 #include "jsonl/load.h"
 
+// for Python bundle
+#ifndef DEFINE_UNICODE_CONSTANTS
+#define DEFINE_UNICODE_CONSTANTS
+#endif
+#include "unicode/unicode.h"
+
 enum {
 	ID_ENTROPY_SHANNON_WEAVER,
 	ID_ENTROPY_Q_LOGARITHMIC,
@@ -747,21 +753,18 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
                 .input_path = s,
                 .jsonl_content_key = "text",
             },
-            .threading = (struct measurement_threading) {0},
-            .steps = (struct measurement_step_parameters) {0},
-            .div_param = (struct measurement_diversity_parameters) {0},
-            .enable = (struct measurement_diversity_enabler) {0}
+		.threading = (struct measurement_threading) {0},
+		.steps = (struct measurement_step_parameters) { .sentence = (struct measurement_step) {0}, .document = (struct measurement_step) {0} },
         };
 
         struct measurement_structure_references sref = {
             .g = &g,
             .sorted_array_discarded_because_not_in_vector_database = &sorted_array_discarded_because_not_in_vector_database,
             .w2v = &(global_word2vecs[w2v_index]),
-            .mst = NULL,
-            .heap = NULL,
         };
 
-        struct measurement_mutables mmut = {0};
+        // struct measurement_mutables mmut = { .best_s = 0.0, .prev_best_s = 0.0, .prev_num_nodes = 0, .sentence = (struct measurement_mutable_counters) {0}, .document = (struct measurement_mutable_counters) {0}, .mst_initialised = 0, .mutex = (pthread_mutex_t) {0}, };
+        struct measurement_mutables mmut = { .best_s = 0.0, .prev_best_s = 0.0, .prev_num_nodes = 0, .sentence = (struct measurement_mutable_counters) {0}, .document = (struct measurement_mutable_counters) {0}, .mst_initialised = 0, };
         if(pthread_mutex_init(&mmut.mutex, NULL) != 0){
             fprintf(stderr, "Failed to call pthread_mutex_init.\n");
             free_graph(&g);

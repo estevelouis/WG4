@@ -204,7 +204,6 @@ malloc_fail:
   return 1;
 }
 
-// int32_t iterate_document_current_token(struct document* const doc, struct udpipe_pipeline* local_pipeline){
 int32_t iterate_document_current_token(struct document *const doc) {
 #if TOKENIZATION_METHOD == 0
   regmatch_t pmatch[NMATCH];
@@ -234,14 +233,9 @@ int32_t iterate_document_current_token(struct document *const doc) {
     return 0;
   }
   if (doc->tmp_udpipe_output_file == NULL) {
-    // fprintf(stderr, "error: doc->tmp_udpipe_output_file == NULL\n");
-    /**/
-    // launch_udpipe(doc, local_pipeline);
     launch_udpipe(doc);
     doc->reached_last_token = 0;
     doc->usable = 0;
-    /**/
-    // return 1;
   }
 
   while (fgets(doc->current_token, JSONL_CURRENT_TOKEN_BUFFER_SIZE, doc->tmp_udpipe_output_file) &&
@@ -271,18 +265,26 @@ void free_document(struct document *doc) {
   if (doc->tmp_udpipe_output_file != NULL) {
     fclose(doc->tmp_udpipe_output_file);
   }
-  // if(close(doc->output_pipefd[0]) != 0){goto closing_fd_failed;}
-  // if(close(doc->output_pipefd[1]) != 0){goto closing_fd_failed;}
   if (doc->heap_char_output != NULL) {
     free(doc->heap_char_output);
   }
 
-/*
-closing_fd_failed:
-perror("Closing output pipefd failed\n");
-exit(1);
-*/
 #endif
+}
+
+int32_t jsonl_document_iterator_request_more_capacity_current_line(struct jsonl_document_iterator *const jdi) {
+  const size_t new_capacity = jdi->current_line_capacity + JSONL_FILE_READ_BUFFER_SIZE;
+  const size_t alloc_size = new_capacity * sizeof(char);
+  jdi->current_line = realloc(jdi->current_line, alloc_size);
+  if (jdi->current_line == NULL) {
+    perror("Failed to realloc\n");
+    return 1;
+  }
+  memset(&(jdi->current_line[jdi->current_line_capacity]), '\0', JSONL_FILE_READ_BUFFER_SIZE * sizeof(char));
+
+  jdi->current_line_capacity = new_capacity;
+
+  return 0;
 }
 
 int32_t create_jsonl_document_iterator(struct jsonl_document_iterator *jdi, const char *file_name,
@@ -311,18 +313,29 @@ int32_t create_jsonl_document_iterator(struct jsonl_document_iterator *jdi, cons
 
   jdi->document_to_free = 1;
 
+  const size_t alloc_size = JSONL_FILE_READ_BUFFER_SIZE * sizeof(char);
+  jdi->current_line = malloc(alloc_size);
+  if (jdi->current_line == NULL) {
+    perror("Failed to malloc\n");
+    return 1;
+  }
+  memset(jdi->current_line, '\0', alloc_size);
+  jdi->current_line_cardinality = 0;
+  jdi->current_line_capacity = JSONL_FILE_READ_BUFFER_SIZE;
+
   return 0;
 }
 
 void free_jsonl_document_iterator(struct jsonl_document_iterator *jdi) {
   free_document(&(jdi->current_document));
   fclose(jdi->file_ptr);
+  free(jdi->current_line);
 }
 
-// int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator* restrict const jdi, struct udpipe_pipeline* const
-// local_pipeline){
 int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator *restrict const jdi) {
   memset(jdi->bfr_read, '\0', JSONL_FILE_READ_BUFFER_SIZE);
+  memset(jdi->current_line, '\0', jdi->current_line_capacity); // cardinality instead?
+  jdi->current_line_cardinality = 0;
 
   int8_t in_key = 0;
   int8_t in_value = 0;
@@ -372,9 +385,33 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator *restrict
   }
 
   while (fgets(jdi->bfr_read, JSONL_FILE_READ_BUFFER_SIZE, jdi->file_ptr) != NULL && strlen(jdi->bfr_read) != 0) {
+    // update jdi current line
+    const size_t len_bfr_read = strlen(jdi->bfr_read);
+    if (jdi->current_line_cardinality + len_bfr_read + 1 >= jdi->current_line_capacity) {
+      if (jsonl_document_iterator_request_more_capacity_current_line(jdi) != 0) {
+        perror("Failed to call jsonl_document_iterator_request_more_capacity_current_line\n");
+        return 1;
+      }
+    }
+    memcpy(&(jdi->current_line[jdi->current_line_cardinality]), jdi->bfr_read, len_bfr_read);
+    jdi->current_line_cardinality += len_bfr_read;
+
     int32_t i = 0;
     int32_t bytes_read = 0;
     while (jdi->bfr_read[i] != '\0') {
+
+      // update jdi current line
+      /*
+      if(jdi->current_line_cardinality >= jdi->current_line_capacity - 1){ // -1 to ensure null byte at the end
+          if(jsonl_document_iterator_request_more_capacity_current_line(jdi) != 0){
+              perror("Failed to call jsonl_document_iterator_request_more_capacity_current_line\n");
+              return 1;
+          }
+      }
+      jdi->current_line[jdi->current_line_cardinality] = jdi->bfr_read[i];
+      jdi->current_line_cardinality++;
+      */
+
       bytes_read++;
       if (jdi->bfr_read[i] == '\n') {
         free(key);
@@ -400,6 +437,9 @@ int32_t iterate_jsonl_document_iterator(struct jsonl_document_iterator *restrict
         if (feof(jdi->file_ptr)) {
           jdi->file_is_done = 1;
         }
+
+        // memset(jdi->current_line, '\0', jdi->current_line_cardinality * sizeof(char)); // should not be here
+
         return 0; // ?
       }
 
