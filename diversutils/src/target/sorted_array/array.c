@@ -218,9 +218,8 @@ int32_t insert_sorted_array(struct sorted_array *array, void *alt, int8_t insert
       }
     } else if (insert_mode == 2) {
       if (index != -1) {
-        // memcpy((void*) (((uint64_t) array->bfr) + (index * array->element_size)), alt, array->element_size); // compliance
-        // memcpy(((void*) array->bfr) + ((void*) (index * array->element_size)), alt, array->element_size);
-        memcpy(((void *)array->bfr) + (index * array->element_size), alt, array->element_size);
+        memcpy((void *)(((uint64_t)array->bfr) + (index * array->element_size)), alt, array->element_size); // compliance
+        // memcpy(((void*) array->bfr) + (index * array->element_size), alt, array->element_size);
         return 0;
       }
     } else {
@@ -235,16 +234,15 @@ int32_t insert_sorted_array(struct sorted_array *array, void *alt, int8_t insert
       perror("failed to realloc\n");
       return 1;
     }
-    // memset((void*) (((uint64_t) array->bfr) + (array->capacity * array->element_size)), '\0', SORTED_ARRAY_STEP *
-    // array->element_size); // compliance memset(((void*) array->bfr) + ((void*) (array->capacity * array->element_size)),
-    // '\0', SORTED_ARRAY_STEP * array->element_size);
-    memset(((void *)array->bfr) + (array->capacity * array->element_size), '\0', SORTED_ARRAY_STEP * array->element_size);
+    memset((void *)(((uint64_t)array->bfr) + (array->capacity * array->element_size)), '\0',
+           SORTED_ARRAY_STEP * array->element_size); // compliance
+    // memset(((void*) array->bfr) + (array->capacity * array->element_size), '\0', SORTED_ARRAY_STEP * array->element_size);
     array->capacity += SORTED_ARRAY_STEP;
   }
   // memset(((void*) array->bfr) + (array->num_elements * array->element_size), '\0', array->element_size); // ?
-  // memcpy((void*) (((uint64_t) array->bfr) + (array->num_elements * array->element_size)), alt, array->element_size); //
-  // compliance memcpy(((void*) array->bfr) + ((void*) (array->num_elements * array->element_size)), alt, array->element_size);
-  memcpy(((void *)array->bfr) + (array->num_elements * array->element_size), alt, array->element_size);
+  memcpy((void *)(((uint64_t)array->bfr) + (array->num_elements * array->element_size)), alt,
+         array->element_size); // compliance
+  // memcpy(((void*) array->bfr) + (array->num_elements * array->element_size), alt, array->element_size);
   array->num_elements++;
 
   if (array->num_elements - array->num_elements_sorted >= SORTED_ARRAY_UNSORTED_PART_MAX_SIZE) {

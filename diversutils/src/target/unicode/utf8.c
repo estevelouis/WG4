@@ -4,18 +4,18 @@
 #include "unicode/unicode.h"
 
 int8_t utf8_get_length(const char *const s) {
-  if ((s[0] & 0b11111000) == 0b11110000) {
+  if ((s[0] & 0xf8) == 0xf0) {
     return 4;
-  } // starts with 11110
-  else if ((s[0] & 0b11110000) == 0b11100000) {
+  } // if((s[0] & 0b11111000) == 0b11110000){return 4;} // starts with 11110
+  else if ((s[0] & 0xf0) == 0xe0) {
     return 3;
-  } // starts with 1110
-  else if ((s[0] & 0b11100000) == 0b11000000) {
+  } // else if((s[0] & 0b11110000) == 0b11100000){return 3;} // starts with 1110
+  else if ((s[0] & 0xe0) == 0xc0) {
     return 2;
-  } // starts with 110
-  else if ((s[0] & 0b10000000) == 0b00000000) {
+  } // else if((s[0] & 0b11100000) == 0b11000000){return 2;} // starts with 110
+  else if ((s[0] & 0x80) == 0x00) {
     return 1;
-  } // starts with 0
+  } // else if((s[0] & 0b10000000) == 0b00000000){return 1;} // starts with 0
   else {
     return -1;
   } // not well-formed
@@ -32,9 +32,9 @@ int32_t utf8_is_well_formed(const char *const s, int8_t *const len_p) {
 
   int8_t i;
   for (i = 1; i < len; i++) {
-    if ((s[i] & 0b11000000) != 0b10000000) {
+    if ((s[i] & 0xc0) != 0x80) {
       return 0;
-    } // not well-formed
+    } // if((s[i] & 0b11000000) != 0b10000000){return 0;} // not well-formed
   }
 
   return 1; // well-formed
@@ -53,17 +53,17 @@ unicode_t utf8_to_unicode(const char *const s, int8_t *const len_p) {
   if (len == 1) {
     unicode = (unicode_t)((uint8_t)s[0]);
   } else if (len == 2) {
-    unicode = ((unicode_t)((uint8_t)s[0] & 0b00011111)) << 6;
-    unicode += ((unicode_t)((uint8_t)s[1] & 0b00111111));
+    unicode = ((unicode_t)((uint8_t)s[0] & 0x1f)) << 6; // unicode = ((unicode_t) ((uint8_t) s[0] & 0b00011111)) << 6;
+    unicode += ((unicode_t)((uint8_t)s[1] & 0x3f));     // unicode += ((unicode_t) ((uint8_t) s[1] & 0b00111111));
   } else if (len == 3) {
-    unicode = ((unicode_t)((uint8_t)s[0] & 0b00001111)) << 12;
-    unicode += ((unicode_t)((uint8_t)s[1] & 0b00111111)) << 6;
-    unicode += ((unicode_t)((uint8_t)s[2] & 0b00111111));
+    unicode = ((unicode_t)((uint8_t)s[0] & 0x0f)) << 12; // unicode = ((unicode_t) ((uint8_t) s[0] & 0b00001111)) << 12;
+    unicode += ((unicode_t)((uint8_t)s[1] & 0x3f)) << 6; // unicode += ((unicode_t) ((uint8_t) s[1] & 0b00111111)) << 6;
+    unicode += ((unicode_t)((uint8_t)s[2] & 0x3f));      // unicode += ((unicode_t) ((uint8_t) s[2] & 0b00111111));
   } else if (len == 4) {
-    unicode = ((unicode_t)((uint8_t)s[0] & 0b00000111)) << 18;
-    unicode += ((unicode_t)((uint8_t)s[1] & 0b00111111)) << 12;
-    unicode += ((unicode_t)((uint8_t)s[2] & 0b00111111)) << 6;
-    unicode += ((unicode_t)((uint8_t)s[3] & 0b00111111));
+    unicode = ((unicode_t)((uint8_t)s[0] & 0x07)) << 18;  // unicode = ((unicode_t) ((uint8_t) s[0] & 0b00000111)) << 18;
+    unicode += ((unicode_t)((uint8_t)s[1] & 0x3f)) << 12; // unicode += ((unicode_t) ((uint8_t) s[1] & 0b00111111)) << 12;
+    unicode += ((unicode_t)((uint8_t)s[2] & 0x3f)) << 6;  // unicode += ((unicode_t) ((uint8_t) s[2] & 0b00111111)) << 6;
+    unicode += ((unicode_t)((uint8_t)s[3] & 0x3f));       // unicode += ((unicode_t) ((uint8_t) s[3] & 0b00111111));
   }
   return unicode;
 }
