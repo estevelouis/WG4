@@ -200,6 +200,7 @@ struct word2vec {
 
 int32_t word2vec_entry_cmp(const void *restrict, const void *restrict);
 int32_t load_word2vec_binary(struct word2vec *restrict, const char *restrict);
+void reset_word2vec_active_in_current_graph(struct word2vec *restrict const w2v);
 void free_word2vec(struct word2vec *restrict);
 int32_t word2vec_key_to_index(const struct word2vec *restrict, const char *restrict);
 struct word2vec_entry *word2vec_find_closest(const struct word2vec *restrict, const char *restrict);

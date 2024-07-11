@@ -723,6 +723,8 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
     cardinality_files = PyList_Size(listFiles);
     cardinality_functions = PyList_Size(listFunctions);
 
+    reset_word2vec_active_in_current_graph(&global_word2vecs[w2v_index]);
+
     struct graph g = {0};
 
     if(create_graph_empty(&g) != 0){
@@ -813,6 +815,7 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
         }
     }
 
+    free_sorted_array(&sorted_array_discarded_because_not_in_vector_database);
     free_graph(&g);
 
     return listResults;

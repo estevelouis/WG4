@@ -166,7 +166,7 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
               return 1;
             }
           }
-          struct graph_node local_node;
+          struct graph_node local_node = {0};
           if (create_graph_node(&local_node, sref->g->nodes[0].num_dimensions, FP32) != 0) {
             perror("failed to call create_graph_node\n");
             return 1;
@@ -279,7 +279,12 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
                 return 1;
               }
             }
-            struct graph_node local_graph_node;
+            struct graph_node local_graph_node = {0};
+            if (create_graph_node(&local_graph_node, sref->g->nodes[0].num_dimensions, FP32) !=
+                0) { // copied and modified from above
+              perror("failed to call create_graph_node\n");
+              return 1;
+            }
             local_graph_node.num_dimensions = (int16_t)sref->w2v->num_dimensions;
             local_graph_node.already_considered = 0;
             local_graph_node.relative_proportion = 1.0;

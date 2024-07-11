@@ -490,8 +490,10 @@ int32_t create_graph_node(struct graph_node *restrict node, const uint16_t num_d
 
   size_t malloc_size;
 
-  // node->mutex_local_node = (PTHREAD_MUTEX_INITIALIZER);
-  pthread_mutex_init(&node->mutex_local_node, NULL);
+  if (pthread_mutex_init(&node->mutex_local_node, NULL) != 0) {
+    perror("failed to call pthread_mutex_init\n");
+    return 1;
+  }
 
   node->already_considered = 0;
 
@@ -665,6 +667,16 @@ int32_t request_more_capacity_graph(struct graph *restrict const g) {
   g->nodes = (struct graph_node *)malloc_pointer;
   memset(&(g->nodes[g->capacity]), '\0', GRAPH_CAPACITY_STEP * sizeof(struct graph_node));
   g->capacity += GRAPH_CAPACITY_STEP;
+
+  /*
+  for(int32_t i = g->num_nodes ; i < g->capacity ; i++){
+      if(pthread_mutex_init(&(g->nodes[i].mutex_local_node), NULL) != 0){
+          perror("failed to call pthread_mutex_init\n");
+          return 1;
+      }
+  }
+  */
+
   return 0;
 }
 
@@ -881,6 +893,12 @@ malloc_fail:
 
 return_failure:
   return 1;
+}
+
+void reset_word2vec_active_in_current_graph(struct word2vec *restrict const w2v) {
+  for (uint64_t i = 0; i < w2v->num_vectors; i++) {
+    w2v->keys[i].active_in_current_graph = 0;
+  }
 }
 
 void free_word2vec(struct word2vec *restrict w2v) {
