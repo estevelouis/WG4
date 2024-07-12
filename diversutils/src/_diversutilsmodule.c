@@ -697,11 +697,6 @@ static PyObject* interface_cfg_get_value(PyObject* self, PyObject* args){
 static PyObject* interface_score_file(PyObject* self, PyObject* args){
     (void) self;
 
-    /*
-    PyListObject * listFiles;
-    PyListObject * listFunctions;
-    PyListObject * listResults;
-    */
     PyObject * listFiles;
     PyObject * listFunctions;
     PyObject * listResults;
@@ -709,7 +704,6 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
     int32_t cardinality_files = 0;
     int32_t cardinality_functions = 0;
 
-    // if(!PyArg_ParseTuple(args, "O!O!", &PyList_Type, &listFiles, &PyList_Type, &listFunctions)){ // works
     if(!PyArg_ParseTuple(args, "O!O!i", &PyList_Type, &listFiles, &PyList_Type, &listFunctions, &w2v_index)){
         fprintf(stderr, "Failed to parse arguments!\n");
         return NULL;
@@ -740,7 +734,6 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
 
     for(int32_t i = 0 ; i < cardinality_files ; i++){
         char * s;
-        // if(!PyArg_ParseTuple(PyList_GetItem(listFiles, i), "s", &s)){
         if(!PyArg_Parse(PyList_GetItem(listFiles, i), "s", &s)){
             fprintf(stderr, "Failed to get file name at index %i.\n", i);
             return NULL;
@@ -765,7 +758,6 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
             .w2v = &(global_word2vecs[w2v_index]),
         };
 
-        // struct measurement_mutables mmut = { .best_s = 0.0, .prev_best_s = 0.0, .prev_num_nodes = 0, .sentence = (struct measurement_mutable_counters) {0}, .document = (struct measurement_mutable_counters) {0}, .mst_initialised = 0, .mutex = (pthread_mutex_t) {0}, };
         struct measurement_mutables mmut = { .best_s = 0.0, .prev_best_s = 0.0, .prev_num_nodes = 0, .sentence = (struct measurement_mutable_counters) {0}, .document = (struct measurement_mutable_counters) {0}, .mst_initialised = 0, };
         if(pthread_mutex_init(&mmut.mutex, NULL) != 0){
             fprintf(stderr, "Failed to call pthread_mutex_init.\n");
@@ -800,6 +792,8 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
         free_graph(&g);
         return NULL;
     }
+
+    compute_graph_relative_proportions(&g);
 
     for(int32_t j = 0 ; j < cardinality_functions ; j++){
         PyObject * id_function_obj = PyList_GetItem(listFunctions, j);
