@@ -30,6 +30,20 @@
 
 #include <stdint.h>
 
+enum {
+  UD_ID = 0,
+  UD_FORM = 1,
+  UD_LEMMA = 2,
+  UD_UPOS = 3,
+  UD_XPOS = 4,
+  UD_FEATS = 5,
+  UD_HEAD = 6,
+  UD_DEPREL = 7,
+  UD_DEPS = 8,
+  UD_MISC = 9,
+  UD_MWE = 10,
+};
+
 #define TOKEN_ID_RAW_SIZE 16
 #define TOKEN_FORM_SIZE 64
 #define TOKEN_LEMMA_SIZE 64

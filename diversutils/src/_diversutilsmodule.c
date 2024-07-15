@@ -698,24 +698,33 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
     (void) self;
 
     PyObject * listFiles;
+    PyObject * listFilesTP;
     PyObject * listFunctions;
     PyObject * listResults;
+    int32_t target_column = -1;
     int32_t w2v_index = -1;
     int32_t cardinality_files = 0;
+    int32_t cardinality_files_tp = 0;
     int32_t cardinality_functions = 0;
 
-    if(!PyArg_ParseTuple(args, "O!O!i", &PyList_Type, &listFiles, &PyList_Type, &listFunctions, &w2v_index)){
+    if(!PyArg_ParseTuple(args, "O!O!O!ii", &PyList_Type, &listFiles, &PyList_Type, &listFilesTP, &PyList_Type, &listFunctions, &w2v_index, &target_column)){
         fprintf(stderr, "Failed to parse arguments!\n");
         return NULL;
     }
 
-    if(PyList_Check(listFiles) != 1 || PyList_Check(listFunctions) != 1){
-        fprintf(stderr, "Both arguments must be lists.\n");
+    if(PyList_Check(listFiles) != 1 || PyList_Check(listFilesTP) != 1 || PyList_Check(listFunctions) != 1){
+        fprintf(stderr, "First three arguments must be lists.\n");
         return NULL;
     }
 
     cardinality_files = PyList_Size(listFiles);
+    cardinality_files_tp = PyList_Size(listFilesTP);
     cardinality_functions = PyList_Size(listFunctions);
+
+    if(!(cardinality_files_tp == 0 || cardinality_files_tp == cardinality_files)){
+        fprintf(stderr, "Second argument (gold paths) must be either of length 0 or of length equal to the first argument (prediction paths). First argument's length: %i; second argument's length: %i.\n", cardinality_files, cardinality_files_tp);
+        return NULL;
+    }
 
     reset_word2vec_active_in_current_graph(&global_word2vecs[w2v_index]);
 
@@ -734,14 +743,23 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
 
     for(int32_t i = 0 ; i < cardinality_files ; i++){
         char * s;
+        char * s_tp = NULL;
         if(!PyArg_Parse(PyList_GetItem(listFiles, i), "s", &s)){
             fprintf(stderr, "Failed to get file name at index %i.\n", i);
             return NULL;
         }
-        printf("Processing file %i/%i: %s\n", i, cardinality_files, s);
+        if(cardinality_files_tp > 0){
+            if(!PyArg_Parse(PyList_GetItem(listFilesTP, i), "s", &s_tp)){
+                fprintf(stderr, "Failed to get file name (TP) at index %i.\n", i);
+                return NULL;
+            } 
+            printf("Processing file %i/%i: %s (gold: %s)\n", i, cardinality_files, s, s_tp);
+        } else {
+            printf("Processing file %i/%i: %s\n", i, cardinality_files, s);
+        }
 
         struct measurement_configuration mcfg = {
-            .target_column = UD_FORM,
+            .target_column = target_column,
             .enable_token_utf8_normalisation = 0,
             .jsonl_content_key = "text",
             .io = (struct measurement_io) {
@@ -768,7 +786,7 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
         size_t len_s = strlen(s);
 
         if(strcmp(s + len_s - 5, ".cupt") == 0 || strcmp(s + len_s - 7, ".conllu") == 0){
-            if(cupt_to_graph(i, s, &mcfg, &sref, &mmut) != 0){
+            if(cupt_to_graph(i, s, s_tp, &mcfg, &sref, &mmut) != 0){
                 fprintf(stderr, "Failed to call cupt_to_graph for %s.\n", s);
                 pthread_mutex_destroy(&mmut.mutex);
                 free_graph(&g);
@@ -854,7 +872,7 @@ static PyMethodDef diversutilsmethods[] = {
 	{"bind_w2v", interface_bind_w2v, METH_VARARGS, "Bind a Word2Vec binary to a graph. ARGS: graph index, Word2Vec index."},
 	{"load_w2v", interface_load_w2v, METH_VARARGS, "Load a Word2Vec binary. ARGS: Word2Vec index."},
 	{"free_w2v", interface_free_w2v, METH_VARARGS, "Free a Word2Vec binary. ARGS: Word2Vec index."},
-    {"score_file", interface_score_file, METH_VARARGS, "Compute scores for one or more files. ARGS: List of files, list of measures."},
+    {"score_file", interface_score_file, METH_VARARGS, "Compute scores for one or more files. ARGS: List of paths, list of gold paths or empty list, list of measures, index of vector space, index of CUPT column."},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -905,5 +923,16 @@ PyMODINIT_FUNC PyInit__diversutils(void){
 	PyModule_AddIntConstant(mod, "DF_DISPARITY_SCHEINER", ID_DISPARITY_SCHEINER);
 	PyModule_AddIntConstant(mod, "DF_DISPARITY_STIRLING", ID_DISPARITY_STIRLING);
 	PyModule_AddIntConstant(mod, "DF_DISPARITY_RICOTTA_SZEIDL", ID_DISPARITY_RICOTTA_SZEIDL);
+    PyModule_AddIntConstant(mod, "UD_ID", UD_ID);
+    PyModule_AddIntConstant(mod, "UD_FORM", UD_FORM);
+    PyModule_AddIntConstant(mod, "UD_LEMMA", UD_LEMMA);
+    PyModule_AddIntConstant(mod, "UD_UPOS", UD_UPOS);
+    PyModule_AddIntConstant(mod, "UD_XPOS", UD_XPOS);
+    PyModule_AddIntConstant(mod, "UD_FEATS", UD_FEATS);
+    PyModule_AddIntConstant(mod, "UD_HEAD", UD_HEAD);
+    PyModule_AddIntConstant(mod, "UD_DEPREL", UD_DEPREL);
+    PyModule_AddIntConstant(mod, "UD_DEPS", UD_DEPS);
+    PyModule_AddIntConstant(mod, "UD_MISC", UD_MISC);
+    PyModule_AddIntConstant(mod, "UD_MWE", UD_MWE);
 	return mod;
 }

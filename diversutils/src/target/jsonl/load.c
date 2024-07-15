@@ -32,7 +32,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cupt/constants.h"
 #include "distributions.h"
+#include "filter.h"
 #include "graph.h"
 #include "jsonl/parser.h"
 #include "logging.h"
@@ -64,6 +66,15 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
     if (jdi.current_document.text_size == 0 || jdi.current_document.identifier_size == 0) {
       continue;
     }
+
+#if ENABLE_FILTER_ON_JSONL_DOCUMENTS == 1
+    if (filter_substitute_all(&jdi.current_document.text, &jdi.current_document.text_size)) {
+      perror("failed to call filter_substitute_all\n");
+      return 1;
+    };
+    jdi.current_document.text_size = strlen(jdi.current_document.text);
+#endif
+
     while (!(jdi.current_document.reached_last_token)) {
       if (iterate_document_current_token(&(jdi.current_document)) != 0) {
         perror("failed to call iterate_document_current_token\n");
@@ -153,10 +164,14 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
 
     pthread_mutex_lock(&mmut->mutex);
     pthread_mutex_lock(&sref->g->mutex_nodes);
+    // if((mcfg->target_column != UD_MWE || found_at_least_one_mwe) && (mcfg->steps.document.enable_count_recompute_step &&
+    // (((!mcfg->steps.document.use_log10) && mmut->document.num % mcfg->steps.document.recompute_step == 0) ||
+    // (mcfg->steps.document.use_log10 && mmut->document.num >= mmut->document.count_target)) && sref->g->num_nodes > 1)){ // DO
+    // NOT REMOVE
     if ((mcfg->target_column != UD_MWE || found_at_least_one_mwe) &&
         (mcfg->steps.document.enable_count_recompute_step &&
-         (((!mcfg->steps.document.use_log10) && mmut->document.num % mcfg->steps.document.recompute_step == 0) ||
-          (mcfg->steps.document.use_log10 && mmut->document.num >= mmut->document.count_target)) &&
+         (((!mcfg->steps.document.use_log10) && mmut->document.num_all % mcfg->steps.document.recompute_step == 0) ||
+          (mcfg->steps.document.use_log10 && mmut->document.num_all >= mmut->document.count_target)) &&
          sref->g->num_nodes > 1)) {
       compute_graph_relative_proportions(sref->g);
 
@@ -168,8 +183,10 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
 
       if (mmut->best_s != mmut->prev_best_s || sref->g->num_nodes != ((uint64_t)mmut->prev_num_nodes)) {
         memset(log_bfr, '\0', log_bfr_size);
+        // snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", mmut->best_s,
+        // sref->g->num_nodes, mmut->sentence.num, mmut->document.num); // DO NOT REMOVE
         snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", mmut->best_s,
-                 sref->g->num_nodes, mmut->sentence.num, mmut->document.num);
+                 sref->g->num_nodes, mmut->sentence.num_all, mmut->document.num_all);
         info_format(__FILE__, __func__, __LINE__, log_bfr);
 
         err = apply_diversity_functions_to_graph(i, mcfg, sref, mmut);
@@ -195,7 +212,8 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
     }
     pthread_mutex_unlock(&sref->g->mutex_nodes);
 
-    mmut->document.num++;
+    // mmut->document.num++; // DO NOT REMOVE
+    mmut->document.num_all++;
     pthread_mutex_unlock(&mmut->mutex);
   }
 

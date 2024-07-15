@@ -2608,7 +2608,13 @@ int32_t ricotta_szeidl_from_graph(struct graph *const g, double *const result, c
   double local_result = 0.0;
 
   for (uint64_t i = 0; i < g->num_nodes; i++) {
-    double local_neg_sum = 1.0;
+    // double local_neg_sum = 1.0;
+    double local_sum;
+    if (alpha_arg == 1.0) {
+      local_sum = 0.0;
+    } else {
+      local_sum = 1.0;
+    }
     for (uint64_t j = 0; j < g->num_nodes; j++) {
       if (i == j) {
         continue;
@@ -2644,18 +2650,32 @@ int32_t ricotta_szeidl_from_graph(struct graph *const g, double *const result, c
       if (distance < 0.0) {
         printf("distance is negative: %f\n", distance);
       }
-      local_neg_sum -= distance * g->nodes[j].relative_proportion;
+
+      if (alpha_arg != 1.0) {
+        local_sum -= distance * g->nodes[j].relative_proportion;
+      } else {
+        local_sum += (1.0 - distance) * g->nodes[j].relative_proportion;
+      }
     }
-    double product = g->nodes[i].relative_proportion * pow(local_neg_sum, alpha_arg - 1.0);
-    if (isnan(product)) {
-      printf("product is nan; relative_proportion: %f, pow: %f, local_neg_sum: %f, alpha[k] - 1.0: %f\r",
-             g->nodes[i].relative_proportion, pow(local_neg_sum, alpha_arg - 1.0), local_neg_sum, alpha_arg - 1.0);
-      continue;
+
+    if (alpha_arg != 1.0) {
+      double product = g->nodes[i].relative_proportion * pow(local_sum, alpha_arg - 1.0);
+      if (isnan(product)) {
+        printf("product is nan; relative_proportion: %f, pow: %f, local_sum: %f, alpha[k] - 1.0: %f\r",
+               g->nodes[i].relative_proportion, pow(local_sum, alpha_arg - 1.0), local_sum, alpha_arg - 1.0);
+        continue;
+      }
+      local_result += product;
+    } else {
+      local_result += g->nodes[i].relative_proportion * log(local_sum);
     }
-    local_result += product;
   }
 
-  local_result = (1.0 - local_result) / (alpha_arg - 1.0);
+  if (alpha_arg != 1.0) {
+    local_result = (1.0 - local_result) / (alpha_arg - 1.0);
+  } else {
+    local_result = -local_result;
+  }
   (*result) = local_result;
   return 0;
 }

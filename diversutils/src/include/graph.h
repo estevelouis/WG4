@@ -206,8 +206,6 @@ int32_t word2vec_key_to_index(const struct word2vec *restrict, const char *restr
 struct word2vec_entry *word2vec_find_closest(const struct word2vec *restrict, const char *restrict);
 void free_graph(struct graph *restrict);
 
-enum { UD_FORM, UD_LEMMA, UD_MWE };
-
 int32_t word2vec_to_graph_fp32(struct graph *, struct word2vec *, char **, char **, int32_t, int32_t);
 // ---- </word2vec> ----
 

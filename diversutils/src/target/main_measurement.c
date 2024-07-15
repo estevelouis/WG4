@@ -54,6 +54,8 @@
 
 #include "macroconfig.h"
 
+#include "filter.h"
+
 const uint8_t ENABLE_DISTANCE_COMPUTATION =
     ENABLE_DISPARITY_FUNCTIONS &&
     (ENABLE_STIRLING || ENABLE_RICOTTA_SZEIDL || ENABLE_PAIRWISE || ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY ||
@@ -71,6 +73,72 @@ double stacked_sentence_count_log10 = SENTENCE_COUNT_RECOMPUTE_STEP_LOG10;
 int64_t stacked_sentence_count_target;
 double stacked_document_count_log10 = DOCUMENT_COUNT_RECOMPUTE_STEP_LOG10;
 int64_t stacked_document_count_target;
+
+int32_t read_list_simulation_files(const char *const path_list_simulation_files, char ***const resulting_paths,
+                                   int32_t *num_input_paths) {
+  FILE *f_paths_ptr = fopen(path_list_simulation_files, "r");
+  if (f_paths_ptr == NULL) {
+    fprintf(stderr, "cannot open %s\n", path_list_simulation_files);
+    return 1;
+  }
+  // char* bfr[MAX_FILES];
+  char **bfr;
+  const size_t bfr_step = 32;
+  size_t bfr_capacity = bfr_step;
+  size_t bfr_alloc_size = bfr_capacity * sizeof(char *);
+  bfr = malloc(bfr_alloc_size);
+  if (bfr == NULL) {
+    goto failure_alloc;
+  }
+  memset(bfr, '\0', bfr_alloc_size);
+
+  char bfr_read[BFR_SIZE];
+  memset(bfr_read, '\0', BFR_SIZE);
+
+  int32_t num_files = 0;
+  while (fgets(bfr_read, BFR_SIZE - 1, f_paths_ptr)) {
+    if (bfr_read[0] == '#') {
+      continue;
+    }
+
+    size_t bytes_to_cpy = strlen(bfr_read);
+    if (bfr_read[bytes_to_cpy - 1] == '\n') {
+      bytes_to_cpy--;
+    }
+    void *local_malloc_p = malloc(bytes_to_cpy + 1);
+    if (local_malloc_p == NULL) {
+      perror("malloc failed\n");
+      return 1;
+    }
+    memset(local_malloc_p, '\0', bytes_to_cpy + 1);
+    memcpy(local_malloc_p, bfr_read, bytes_to_cpy);
+    bfr[num_files] = (char *)local_malloc_p;
+
+    num_files++;
+
+    if (((size_t)num_files) >= bfr_capacity) {
+      size_t new_capacity = bfr_capacity + bfr_step;
+      bfr_alloc_size = new_capacity * sizeof(char *);
+      bfr = realloc(bfr, bfr_alloc_size);
+      if (bfr == NULL) {
+        goto failure_alloc;
+      }
+      memset(&bfr[bfr_capacity], '\0', bfr_step * sizeof(char *));
+      bfr_capacity = new_capacity;
+    }
+  }
+
+  fclose(f_paths_ptr);
+
+  *resulting_paths = bfr;
+  *num_input_paths = num_files;
+
+  return 0;
+
+failure_alloc:
+  perror("alloc failed\n");
+  return 1;
+}
 
 int32_t measurement(struct measurement_configuration *const mcfg) {
   const int32_t log_bfr_size = 512;
@@ -119,50 +187,31 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
     w2v.keys[i].graph_node_pointer = NULL; // !
   }
 
-  FILE *f_paths_ptr = fopen(mcfg->io.input_path, "r");
-  if (f_paths_ptr == NULL) {
-    fprintf(stderr, "cannot open %s\n", mcfg->io.input_path);
-    return 1;
+  int32_t num_input_paths = 0;
+  int32_t num_input_paths_true_positive = 0;
+  char **input_paths = NULL;
+  char **input_paths_tp = NULL; // !
+
+  // <--
+  if (read_list_simulation_files(mcfg->io.input_path, &input_paths, &num_input_paths) != 0) {
+    goto failure_read_list_simulation_files;
   }
-  char *bfr[MAX_FILES];
-  char bfr_read[BFR_SIZE];
-  memset(bfr_read, '\0', BFR_SIZE);
-
-  int32_t num_files = 0;
-  while (fgets(bfr_read, BFR_SIZE - 1, f_paths_ptr)) {
-    if (bfr_read[0] == '#') {
-      continue;
+  if (mcfg->io.input_path_tp != NULL) {
+    if (read_list_simulation_files(mcfg->io.input_path_tp, &input_paths_tp, &num_input_paths_true_positive) != 0) {
+      goto failure_read_list_simulation_files;
     }
-
-    size_t bytes_to_cpy = strlen(bfr_read);
-    if (bfr_read[bytes_to_cpy - 1] == '\n') {
-      bytes_to_cpy--;
-    }
-    void *local_malloc_p = malloc(bytes_to_cpy + 1);
-    if (local_malloc_p == NULL) {
-      perror("malloc failed\n");
-      return 1;
-    }
-    memset(local_malloc_p, '\0', bytes_to_cpy + 1);
-    memcpy(local_malloc_p, bfr_read, bytes_to_cpy);
-    bfr[num_files] = (char *)local_malloc_p;
-
-    num_files++;
   }
-
-  fclose(f_paths_ptr);
-
-  int32_t num_input_paths = num_files;
-  char **input_paths = bfr;
-  // char** input_paths_true_positives = NULL;
 
   mcfg->io.f_ptr = fopen(mcfg->io.output_path, "w");
   if (mcfg->io.f_ptr == NULL) {
     fprintf(stderr, "Failed to open file: %s\n", mcfg->io.output_path);
     return EXIT_FAILURE;
   }
-  fprintf(mcfg->io.f_ptr, "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_"
-                          "types\ts\tn\tmu_dist\tsigma_dist");
+  // fprintf(mcfg->io.f_ptr,
+  // "num_active_files\tnum_active_sentences\tnum_all_sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
+  // // DO NOT REMOVE
+  fprintf(mcfg->io.f_ptr, "num_active_files\tnum_sentences_containing_mwe\tnum_sentences_containing_mwe_tp_only\tnum_all_"
+                          "sentences\tnum_documents\tw2v\tnum_discarded_types\ts\tn\tmu_dist\tsigma_dist");
 
   if (mcfg->enable.disparity_functions) {
     if (mcfg->enable.stirling) {
@@ -599,14 +648,14 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
       .mst_initialised = 0,
       .sentence =
           (struct measurement_mutable_counters){
-              .num = 0,
+              .num_containing_mwe = 0,
+              .num_containing_mwe_tp_only = 0,
               .num_all = 0,
               .count_target = 1,
               .stacked_log = 0.0,
           },
       .document =
           (struct measurement_mutable_counters){
-              .num = 0,
               .num_all = 0,
               .count_target = 1,
               .stacked_log = 0.0,
@@ -670,10 +719,10 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
 
     num_documents++;
     /* // DO NOT REMOVE
-    if(input_paths_true_positives == NULL){
+    if(input_paths_tp == NULL){
             printf("processing %s\n", input_paths[i]);
     } else {
-            printf("processing %s (true positives: %s)\n", input_paths[i], input_paths_true_positives[i]);
+            printf("processing %s (true positives: %s)\n", input_paths[i], input_paths_tp[i]);
     }
     */
     size_t input_path_len = strlen(input_paths[i]);
@@ -700,6 +749,11 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
         .sref = &sref,
         .mmut = &mmut,
     };
+    if (mcfg->io.input_path_tp != NULL) {
+      mft.filename_tp = input_paths_tp[i];
+    } else {
+      mft.filename_tp = NULL;
+    }
     memcpy(&(thread_args_file_reading[thread_index]), &mft, sizeof(struct measurement_file_thread));
     if (current_file_format == CUPT) {
       if (pthread_create(&(threads_file_reading[thread_index]), NULL, cupt_to_graph_thread,
@@ -756,8 +810,17 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
   free(threads_file_reading);
   free(thread_args_file_reading);
 
-  for (int32_t i = 0; i < num_files; i++) {
-    free(bfr[i]);
+  // for(int32_t i = 0 ; i < num_files ; i++){
+  for (int32_t i = 0; i < num_input_paths; i++) {
+    // free(bfr[i]);
+    free(input_paths[i]);
+    if (mcfg->io.input_path_tp != NULL) {
+      free(input_paths_tp[i]);
+    }
+  }
+  free(input_paths);
+  if (mcfg->io.input_path_tp != NULL) {
+    free(input_paths_tp);
   }
 
   fclose(mcfg->io.f_ptr);
@@ -774,12 +837,17 @@ int32_t measurement(struct measurement_configuration *const mcfg) {
   }
 
   return return_status;
+
+failure_read_list_simulation_files:
+  perror("failed to call read_list_simulation_files\n");
+  return 1;
 }
 
 int32_t main(int32_t argc, char **argv) {
   char *argv_w2v_path = NULL;
   char *argv_jsonl_content_key = NULL;
   char *argv_input_path = NULL;
+  char *argv_input_path_tp = NULL;
   char *argv_output_path = NULL;
   char *argv_output_path_timing = NULL;
   char *argv_output_path_memory = NULL;
@@ -887,6 +955,8 @@ int32_t main(int32_t argc, char **argv) {
       argv_jsonl_content_key = argv[i] + 20;
     } else if (strncmp(argv[i], "--input_path=", 13) == 0) {
       argv_input_path = argv[i] + 13;
+    } else if (strncmp(argv[i], "--input_path_tp=", 16) == 0) {
+      argv_input_path_tp = argv[i] + 16;
     } else if (strncmp(argv[i], "--output_path=", 14) == 0) {
       argv_output_path = argv[i] + 14;
     } else if (strncmp(argv[i], "--output_path_timing=", 21) == 0) {
@@ -1139,6 +1209,9 @@ int32_t main(int32_t argc, char **argv) {
   printf("w2v_path: %s\n", argv_w2v_path);
   printf("jsonl_content_key: %s\n", argv_jsonl_content_key);
   printf("input_path: %s\n", argv_input_path);
+  if (argv_input_path_tp != NULL) {
+    printf("input_path_tp: %s\n", argv_input_path_tp);
+  }
   printf("output_path: %s\n", argv_output_path);
   printf("force_timing_and_memory_to_output_path: %u\n", argv_force_timing_and_memory_to_output_path);
   printf("output_path_timing: %s\n", argv_output_path_timing);
@@ -1231,6 +1304,13 @@ int32_t main(int32_t argc, char **argv) {
   jsonl_init_tokenization();
 #endif
 
+#if ENABLE_FILTER == 1
+  if (filter_ready() != 0) {
+    perror("Failed to call filter_ready\n");
+    return 1;
+  }
+#endif
+
   int32_t err;
 
 #if TOKENIZATION_METHOD == 2
@@ -1309,6 +1389,7 @@ int32_t main(int32_t argc, char **argv) {
               .w2v_path = argv_w2v_path,
               .jsonl_content_key = argv_jsonl_content_key,
               .input_path = argv_input_path,
+              .input_path_tp = argv_input_path_tp,
               .output_path = argv_output_path,
               .output_path_timing = argv_output_path_timing,
               .output_path_memory = argv_output_path_memory,
@@ -1365,6 +1446,10 @@ int32_t main(int32_t argc, char **argv) {
     free(argv_output_path_timing);
     free(argv_output_path_memory);
   }
+
+#if ENABLE_FILTER == 1
+  filter_release();
+#endif
 
   return 0;
 

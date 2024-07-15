@@ -95,6 +95,7 @@ struct measurement_io {
   const char *const w2v_path;
   const char *const jsonl_content_key;
   const char *const input_path;
+  char *const input_path_tp;
   const char *const output_path;
   const char *const output_path_timing;
   const char *const output_path_memory;
@@ -153,7 +154,8 @@ struct measurement_structure_references {
 };
 
 struct measurement_mutable_counters {
-  uint64_t num;
+  uint64_t num_containing_mwe;
+  uint64_t num_containing_mwe_tp_only;
   uint64_t num_all;
   uint64_t count_target;
   double stacked_log;
@@ -174,6 +176,7 @@ struct measurement_mutables {
 struct measurement_file_thread {
   const int32_t i;
   const char *const filename;
+  const char *filename_tp;
   struct measurement_configuration *const mcfg;
   struct measurement_structure_references *const sref;
   struct measurement_mutables *const mmut;

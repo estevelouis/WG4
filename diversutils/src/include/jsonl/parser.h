@@ -37,10 +37,10 @@
 #endif
 
 struct document {
-  int32_t identifier_size;
-  int32_t text_size;
-  int32_t identifier_capacity;
-  int32_t text_capacity;
+  size_t identifier_size;
+  size_t text_size;
+  size_t identifier_capacity;
+  size_t text_capacity;
 #if TOKENIZATION_METHOD == 0
   regex_t reg;
   regoff_t latest_rm_eo;

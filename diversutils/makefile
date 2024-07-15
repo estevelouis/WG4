@@ -25,11 +25,21 @@ endif
 # ----------
 
 ifeq ($(PEDANTIC), 1)
-    PEDANTIC_FLAG = -pedantic -Werror
+    PEDANTIC_FLAG = -pedantic -Werror -Wfree-nonheap-object -Waddress
 else
     PEDANTIC=0
 endif
 $(info $(shell echo "INFO: Building with \033[1m\033[35mPEDANTIC=$(PEDANTIC)\033[0m."))
+
+# security
+# ----------
+
+ifeq ($(HARDEN), 1)
+    HARDEN_FLAG = -fstack-protector-all
+else
+    HARDEN=0
+endif
+$(info $(shell echo "INFO: Building with \033[1m\033[35mHARDEN=$(HARDEN)\033[0m."))
 
 # optimisation
 # ------------
@@ -96,10 +106,10 @@ $(info $(shell echo "INFO: Building with \033[1m\033[35mTOKENIZATION_METHOD=$(TO
 
 C_VERSION = -std=c99
 ifeq ($(LEGACY_COMPILER), 1)
-    CXX_VERSION = -std=c++0x
+    CXX_VERSION = -std=c++11
 else
     LEGACY_COMPILER = 0
-    CXX_VERSION = -std=c++11
+    CXX_VERSION = -std=c++20
 endif
 $(info $(shell echo "INFO: Building with \033[1m\033[35mLEGACY_COMPILER=$(LEGACY_COMPILER)\033[0m."))
 
@@ -141,6 +151,13 @@ else
     ENABLE_AVX512 = 0
 endif
 
+# filter
+# ------
+
+ifeq ($(origin PCRE2_CODE_UNIT_WIDTH), undefined)
+    PCRE2_CODE_UNIT_WIDTH = 8
+endif
+
 # compiler
 # --------
 
@@ -174,7 +191,7 @@ endif
 # COMPILING OPTIONS
 # -----------------
 
-CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
+CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(HARDEN_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
 CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include
 CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
 CPPFLAGS_TEST = $(CPPFLAGS) -I$(DIVERSUTILS_WORK_PATH)/test/include
@@ -186,7 +203,7 @@ else
     LDFLAGS = -L$(CONDA_PREFIX)/lib $(LDFLAGS_MINIMUM)
 endif
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
-LINKER_FLAGS = -lc -lm -lrt -pthread
+LINKER_FLAGS = -lc -lm -lrt -lpcre2-$(PCRE2_CODE_UNIT_WIDTH) -pthread
 LINKER_FLAG_CXX = -lstdc++
 LINKER_FLAG_UDPIPE = -ludpipe
 LINKER_FLAG_DIVERSUTILS = -ldiversutils
@@ -202,7 +219,7 @@ endif
 
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(PATH_LIB_DIVERSUTILS)
 
-update_bashrc:
+$(HOME)/.bashrc:
 	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
 	set -eu ; echo "INFO: \033[1mConsider running \"\033[33msource ~/.bashrc\033[0m\033[1m\" if you cannot link against *.so files.\033[0m"
 	
@@ -218,20 +235,20 @@ NUM_FILE_READING_THREADS = 4
 
 ENABLE_NON_DISPARITY_MULTITHREADING = 1
 
-ENABLE_DISPARITY_FUNCTIONS = 0
+ENABLE_DISPARITY_FUNCTIONS = 1
 
-ENABLE_STIRLING = 0
-ENABLE_RICOTTA_SZEIDL = 0
-ENABLE_PAIRWISE = 0
-ENABLE_LEXICOGRAPHIC = 0
-ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY = 0
-ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY = 0
-ENABLE_LEINSTER_COBBOLD_DIVERSITY = 0
-ENABLE_FUNCTIONAL_EVENNESS = 0
-ENABLE_FUNCTIONAL_DISPERSION = 0
-ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED = 0
+ENABLE_STIRLING = 1
+ENABLE_RICOTTA_SZEIDL = 1
+ENABLE_PAIRWISE = 1
+ENABLE_LEXICOGRAPHIC = 1
+ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY = 1
+ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY = 1
+ENABLE_LEINSTER_COBBOLD_DIVERSITY = 1
+ENABLE_FUNCTIONAL_EVENNESS = 1
+ENABLE_FUNCTIONAL_DISPERSION = 1
+ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED = 1
 
-ENABLE_NON_DISPARITY_FUNCTIONS = 1
+ENABLE_NON_DISPARITY_FUNCTIONS = 0
 
 ENABLE_SHANNON_WEAVER_ENTROPY = 1
 ENABLE_GOOD_ENTROPY = 1
@@ -267,6 +284,13 @@ ENABLE_ITERATIVE_DISTANCE_COMPUTATION = 0
 ENABLE_MULTITHREADED_ROW_GENERATION = 1
 ENABLE_MULTITHREADED_MATRIX_GENERATION = 1
 
+ifeq ($(origin ALPHA_GENERAL), undefined)
+    ALPHA_GENERAL = 1.0
+endif
+ifeq ($(origin BETA_GENERAL), undefined)
+    BETA_GENERAL = 1.0
+endif
+
 ENABLE_SENTENCE_COUNT_RECOMPUTE_STEP = 1
 SENTENCE_COUNT_RECOMPUTE_STEP = 10000
 SENTENCE_RECOMPUTE_STEP_USE_LOG10 = 1
@@ -282,13 +306,29 @@ OUTPUT_PATH_TIMING = \"measurement_output_timing.tsv\"
 OUTPUT_PATH_MEMORY = \"measurement_output_memory.tsv\"
 
 #W2V_PATH = \"path/to/a/word2vec/formatted/file\"
-W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin\"
+#W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin\"
+#W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/final/MWE_S2S_PL_typed_100d_skip-gram.bin\"
+W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_PL_raw_001-004_skip-gram_100d_typed.bin\"
 
 #TARGET_COLUMN = UD_FORM
-TARGET_COLUMN = UD_LEMMA
-#TARGET_COLUMN = UD_MWE
+#TARGET_COLUMN = UD_LEMMA
+TARGET_COLUMN = UD_MWE
 
-ENABLE_TOKEN_UTF8_NORMALISATION = 1
+ifeq ($(origin ENABLE_TOKEN_UTF8_NORMALISATION), undefined)
+    ENABLE_TOKEN_UTF8_NORMALISATION = 1
+endif
+ifeq ($(origin ENABLE_FILTER), undefined)
+    ENABLE_FILTER = 1
+endif
+ENABLE_FILTER_ON_JSONL_DOCUMENTS = 1
+
+ENABLE_FILTER_XML = 1
+ENABLE_FILTER_PATH = 1
+ENABLE_FILTER_EMAIL = 1
+ENABLE_FILTER_URL = 1
+ENABLE_FILTER_ALPHANUM = 1
+ENABLE_FILTER_LONG = 1
+ENABLE_FILTER_NON_FRENCH = 1
 
 CPP_MACRO_MULTITHREADING = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THREADS=$(NUM_MATRIX_THREADS) -DROW_GENERATION_BATCH_SIZE=$(ROW_GENERATION_BATCH_SIZE) -DNUM_FILE_READING_THREADS=$(NUM_FILE_READING_THREADS) -DENABLE_ITERATIVE_DISTANCE_COMPUTATION=$(ENABLE_ITERATIVE_DISTANCE_COMPUTATION) -DENABLE_MULTITHREADED_ROW_GENERATION=$(ENABLE_MULTITHREADED_ROW_GENERATION) -DENABLE_MULTITHREADED_MATRIX_GENERATION=$(ENABLE_MULTITHREADED_MATRIX_GENERATION) -DENABLE_NON_DISPARITY_MULTITHREADING=$(ENABLE_NON_DISPARITY_MULTITHREADING) -DENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING=$(ENABLE_SW_E_PRIME_CAMARGO1993_MULTITHREADING)
 
@@ -304,9 +344,11 @@ CPP_MACRO_RECOMPUTE = -DENABLE_SENTENCE_COUNT_RECOMPUTE_STEP=$(ENABLE_SENTENCE_C
 
 CPP_MACRO_IO = -DINPUT_PATH=$(INPUT_PATH) -DOUTPUT_PATH=$(OUTPUT_PATH) -DOUTPUT_PATH_TIMING=$(OUTPUT_PATH_TIMING) -DOUTPUT_PATH_MEMORY=$(OUTPUT_PATH_MEMORY) -DW2V_PATH=$(W2V_PATH)
 
-CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) -DENABLE_TOKEN_UTF8_NORMALISATION=$(ENABLE_TOKEN_UTF8_NORMALISATION) -DCOMPILATION_DIR=\"$(PWD)\"
+CPP_MACRO_FILTER = -DENABLE_FILTER=$(ENABLE_FILTER) -DENABLE_FILTER_ON_JSONL_DOCUMENTS=$(ENABLE_FILTER_ON_JSONL_DOCUMENTS) -DENABLE_FILTER_XML=$(ENABLE_FILTER_XML) -DENABLE_FILTER_PATH=$(ENABLE_FILTER_PATH) -DENABLE_FILTER_URL=$(ENABLE_FILTER_URL) -DENABLE_FILTER_EMAIL=$(ENABLE_FILTER_EMAIL) -DENABLE_FILTER_ALPHANUM=$(ENABLE_FILTER_ALPHANUM) -DENABLE_FILTER_LONG=$(ENABLE_FILTER_LONG) -DENABLE_FILTER_NON_FRENCH=$(ENABLE_FILTER_NON_FRENCH)
 
-CPP_MACROS = $(CPP_MACRO_MULTITHREADING) $(CPP_MACRO_AVX) $(CPP_MACRO_DISPARITY) $(CPP_MACRO_NON_DISPARITY) $(CPP_MACRO_TIMING) $(CPP_MACRO_RECOMPUTE) $(CPP_MACRO_IO) $(CPP_MACRO_OTHER)
+CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) -DENABLE_TOKEN_UTF8_NORMALISATION=$(ENABLE_TOKEN_UTF8_NORMALISATION) -DPCRE2_CODE_UNIT_WIDTH=$(PCRE2_CODE_UNIT_WIDTH) -DALPHA_GENERAL=$(ALPHA_GENERAL) -DBETA_GENERAL=$(BETA_GENERAL) -DCOMPILATION_DIR=\"$(PWD)\"
+
+CPP_MACROS = $(CPP_MACRO_MULTITHREADING) $(CPP_MACRO_AVX) $(CPP_MACRO_DISPARITY) $(CPP_MACRO_NON_DISPARITY) $(CPP_MACRO_TIMING) $(CPP_MACRO_RECOMPUTE) $(CPP_MACRO_IO) $(CPP_MACRO_FILTER) $(CPP_MACRO_OTHER)
 
 # JSONL to W2V format variables
 
@@ -375,13 +417,15 @@ $(TGT)/sanitize.c: $(INC)/sanitize.h
 $(TGT)/cupt/parser.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h
 $(TGT)/cupt/load.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h $(INC)/cupt/load.h
 $(TGT)/jsonl/parser.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h
-$(TGT)/jsonl/load.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h $(INC)/jsonl/load.h
+$(TGT)/jsonl/load.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h $(INC)/jsonl/load.h $(INC)/cupt/constants.h
 $(TGT)/cfgparser/parser.c: $(INC)/cfgparser/parser.h
 $(TGT)/unicode/utf8.c: $(INC)/unicode/unicode.h $(INC)/unicode/utf8.h
 $(TGT)/sorted_array/array.c: $(INC)/sorted_array/array.h $(INC)/sorted_array/constants.h
 $(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
 $(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h $(INC)/udpipe/interface/conversion.h
-$(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/macroconfig.h
+$(TGT)/filter.c: $(INC)/filter.h $(INC)/logging.h
+$(TGT)/case.c: $(INC)/case.h
+$(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/filter.h $(INC)/case.h $(INC)/macroconfig.h
 
 ifneq ($(TOKENIZATION_METHOD), 0)
 	$(info INFO: Adding UDPipe elements to requirements)
@@ -390,8 +434,8 @@ ifneq ($(TOKENIZATION_METHOD), 0)
     DIVERSUTILS_TOKENIZATION_CXX_OBJECTS = $(BLD)/udpipe/interface.o
 endif
 
-DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
-DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
+DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(TGT)/filter.c $(TGT)/case.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
+DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(BLD)/filter.o $(BLD)/case.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
 DIVERSUTILS_CXX_OBJECTS = $(DIVERSUTILS_TOKENIZATION_CXX_OBJECTS)
 
 $(DIVERSUTILS_C_OBJECTS) $(BLD)/main_measurement.o: $(BLD)/%.o: $(TGT)/%.c $(BLD)/.placeholder
@@ -401,7 +445,7 @@ $(DIVERSUTILS_CXX_OBJECTS): $(BLD)/%.o: $(TGT)/%.cpp $(BLD)/.placeholder
 	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
 	$(CCPP) $< $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
 
-$(BIN)/main_measurement: $(BIN)/.placeholder $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o update_bashrc
+$(BIN)/main_measurement: $(BIN)/.placeholder $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(HOME)/.bashrc $(DIVERSUTILS_WORK_PATH)/makefile
 	echo "INFO: Linking \"\033[1m\033[31m$@\033[0m\" from \"\033[1m\033[32m$(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS)\033[0m\""
 	$(CCPP) $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
 	echo "INFO: You may now run \"\033[1m\033[33mcd $(BIN) ; ./main_measurement\033[0m\""

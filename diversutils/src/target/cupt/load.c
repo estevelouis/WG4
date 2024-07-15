@@ -40,20 +40,30 @@
 #include "sorted_array/array.h"
 #include "unicode/utf8.h"
 
-int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measurement_configuration *const mcfg,
-                      struct measurement_structure_references *const sref, struct measurement_mutables *const mmut) {
-  struct cupt_sentence_iterator csi = {0};
-  if (create_cupt_sentence_iterator(&csi, filename) != 0) {
-    perror("failed to call create_cupt_sentence_iterator\n");
-    return 1;
-  }
-
+int32_t cupt_to_graph(const uint64_t i, const char *const filename, const char *const filename_tp,
+                      struct measurement_configuration *const mcfg, struct measurement_structure_references *const sref,
+                      struct measurement_mutables *const mmut) {
   const int32_t log_bfr_size = 256;
   char log_bfr[log_bfr_size];
 
+  struct cupt_sentence_iterator csi = {0};
+  struct cupt_sentence_iterator csi_tp = {0};
+  if (create_cupt_sentence_iterator(&csi, filename) != 0) {
+    goto failure_create_cupt_sentence_iterator;
+  }
+  if (filename_tp != NULL) {
+    if (create_cupt_sentence_iterator(&csi_tp, filename_tp) != 0) {
+      goto failure_create_cupt_sentence_iterator;
+    }
+  }
+
   if (iterate_cupt_sentence_iterator(&csi) != 0) {
-    perror("failed to call iterate_cupt_sentence_iterator\n");
-    return 1;
+    goto failure_iterate_cupt_sentence_iterator;
+  }
+  if (filename_tp != NULL) {
+    if (iterate_cupt_sentence_iterator(&csi_tp) != 0) {
+      goto failure_iterate_cupt_sentence_iterator;
+    }
   }
 
   int8_t found_at_least_one_mwe = 0;
@@ -61,15 +71,30 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
     const size_t max_mwe = 32;
     const size_t max_tokens_per_mwe = 32;
     const size_t size_token_mwe = 32;
+    const size_t size_mwe_class = 16;
     size_t mwe_bfr_size = max_mwe * max_tokens_per_mwe * size_token_mwe;
+    size_t mwe_bfr_size_mwe_class = max_mwe * size_mwe_class;
+
     char mwe[mwe_bfr_size];
     memset(mwe, '\0', mwe_bfr_size);
+
     char mwe_tp[mwe_bfr_size];
     memset(mwe_tp, '\0', mwe_bfr_size);
+
+    char mwe_class[mwe_bfr_size_mwe_class];
+    memset(mwe_class, '\0', mwe_bfr_size_mwe_class);
+
+    /*
+    char mwe_class_tp[mwe_bfr_size_mwe_class];
+    memset(mwe_class_tp, '\0', mwe_bfr_size_mwe_class);
+    */
+
     int32_t mwe_lengths[max_mwe];
     memset(mwe_lengths, '\0', max_mwe * sizeof(int32_t));
+
     int32_t mwe_tp_lengths[max_mwe];
     memset(mwe_tp_lengths, '\0', max_mwe * sizeof(int32_t));
+
     int8_t mwe_correct_span[max_mwe];
     memset(mwe_correct_span, 1, max_mwe * sizeof(int8_t));
 
@@ -92,14 +117,25 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
             memcpy(&(mwe[mwe_num * max_tokens_per_mwe * size_token_mwe + mwe_lengths[mwe_num] * size_token_mwe]),
                    csi.current_sentence.tokens[j].lemma, bytes_to_cpy);
             mwe_lengths[mwe_num]++;
+
+            char *ptr_colon = strchr(strtok_placeholder, ':');
+            if (ptr_colon != NULL) {
+              bytes_to_cpy = strlen(ptr_colon + 1);
+              if (bytes_to_cpy > size_mwe_class - 1) {
+                bytes_to_cpy = size_mwe_class - 1;
+              }
+              memcpy(&(mwe_class[mwe_num * size_mwe_class]), ptr_colon + 1, bytes_to_cpy);
+            }
           }
 
-          /* // DO NOT REMOVE
-                              if(input_paths_true_positives != NULL && (strcmp(csi_tp.current_sentence.tokens[j].mwe, "") == 0
-             || strcmp(csi_tp.current_sentence.tokens[j].mwe, "_") == 0 || strcmp(csi_tp.current_sentence.tokens[j].mwe, "-") ==
-             0 || strcmp(csi_tp.current_sentence.tokens[j].mwe, "*") == 0)){ mwe_correct_span[mwe_num] = 0;
-                              }
-          */
+          /**/ // DO NOT REMOVE
+          if (filename_tp != NULL && (strcmp(csi_tp.current_sentence.tokens[j].mwe, "") == 0 ||
+                                      strcmp(csi_tp.current_sentence.tokens[j].mwe, "_") == 0 ||
+                                      strcmp(csi_tp.current_sentence.tokens[j].mwe, "-") == 0 ||
+                                      strcmp(csi_tp.current_sentence.tokens[j].mwe, "*") == 0)) {
+            mwe_correct_span[mwe_num] = 0;
+          }
+          /**/
 
           strtok_placeholder = strtok(NULL, ";");
         }
@@ -127,6 +163,55 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
           len = key_size - 1;
         }
         memcpy(key, csi.current_sentence.tokens[j].lemma, len);
+        break;
+      case UD_UPOS:
+        len = strlen(csi.current_sentence.tokens[j].upos);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].upos, len);
+        break;
+      case UD_XPOS:
+        len = strlen(csi.current_sentence.tokens[j].xpos);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].xpos, len);
+        break;
+      case UD_FEATS:
+        len = strlen(csi.current_sentence.tokens[j].feats);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].feats, len);
+        break;
+      case UD_HEAD:
+        len = strlen(csi.current_sentence.tokens[j].head);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].head, len);
+        break;
+      case UD_DEPREL:
+        len = strlen(csi.current_sentence.tokens[j].deprel);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].deprel, len);
+        break;
+      case UD_DEPS:
+        len = strlen(csi.current_sentence.tokens[j].deps);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].deps, len);
+        break;
+      case UD_MISC:
+        len = strlen(csi.current_sentence.tokens[j].misc);
+        if (len > key_size - 1) {
+          len = key_size - 1;
+        }
+        memcpy(key, csi.current_sentence.tokens[j].misc, len);
         break;
       default:
         index = -1;
@@ -222,16 +307,20 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
     // MWE
 
     if (mcfg->target_column == UD_MWE) {
+      uint8_t in_this_specific_sentence_found_at_least_one_correct_mwe = 0;
+      uint8_t in_this_specific_sentence_found_at_least_one_mwe = 0;
       for (size_t k = 0; k < max_mwe; k++) {
         if (mwe_lengths[k] == 0) {
           continue;
         }
+        in_this_specific_sentence_found_at_least_one_mwe = 1;
 
-        /* // DO NOT REMOVE
-                        if(input_paths_true_positives != NULL && !(mwe_correct_span[k])){
-                                continue;
-                        }
-        */
+        /**/ // DO NOT REMOVE
+        if (filename_tp != NULL && !(mwe_correct_span[k])) {
+          continue;
+        }
+        in_this_specific_sentence_found_at_least_one_correct_mwe = 1;
+        /**/
 
         qsort(&(mwe[k * max_tokens_per_mwe * size_token_mwe]), mwe_lengths[k], size_token_mwe, void_strcmp);
 
@@ -239,8 +328,19 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
         int32_t index_bfr = 0;
         char bfr[bfr_size];
         memset(bfr, '\0', bfr_size);
-        memcpy(bfr + index_bfr, "_MWE_", 5);
+
+        // memcpy(bfr + index_bfr, "_MWE_", 5);
+        // index_bfr += 5;
+        memcpy(bfr + index_bfr, "_MWE-", 5);
         index_bfr += 5;
+
+        const size_t len_mwe_class = strlen(&(mwe_class[k * size_mwe_class]));
+        memcpy(bfr + index_bfr, &(mwe_class[k * size_mwe_class]), len_mwe_class);
+        index_bfr += len_mwe_class;
+
+        bfr[index_bfr] = '_';
+        index_bfr++;
+
         size_t bytes_to_cpy = 0;
         for (int32_t m = 0; m < mwe_lengths[k]; m++) {
           bytes_to_cpy = strlen(&(mwe[k * max_tokens_per_mwe * size_token_mwe + m * size_token_mwe]));
@@ -260,6 +360,8 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
             index_bfr += bytes_to_cpy;
           }
         }
+
+        // printf("created key: %s\n", bfr);
 
         // pthread_mutex_lock(&sref->w2v->mutex);
         int32_t index = word2vec_key_to_index(sref->w2v, bfr);
@@ -334,9 +436,19 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
         // pthread_mutex_unlock(&sref->w2v->mutex);
       }
 
-      if (found_at_least_one_mwe) {
+      /*
+                  if(found_at_least_one_mwe){ // for efficient recomputation
+          pthread_mutex_lock(&mmut->mutex);
+                          // mmut->sentence.num_all++;
+          pthread_mutex_unlock(&mmut->mutex);
+                  }
+      */
+      if (in_this_specific_sentence_found_at_least_one_mwe) {
         pthread_mutex_lock(&mmut->mutex);
-        mmut->sentence.num_all++;
+        mmut->sentence.num_containing_mwe++;
+        if (in_this_specific_sentence_found_at_least_one_correct_mwe) {
+          mmut->sentence.num_containing_mwe_tp_only++;
+        }
         pthread_mutex_unlock(&mmut->mutex);
       }
     }
@@ -344,10 +456,14 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
     pthread_mutex_lock(&mmut->mutex);
     pthread_mutex_lock(&sref->g->mutex_nodes);
     // sentence level recomputation
+    // if((mcfg->target_column != UD_MWE || found_at_least_one_mwe) && (mcfg->steps.sentence.enable_count_recompute_step &&
+    // (((!mcfg->steps.sentence.use_log10) && mmut->sentence.num % mcfg->steps.sentence.recompute_step == 0) ||
+    // (mcfg->steps.sentence.use_log10 && mmut->sentence.num >= mmut->sentence.count_target))) && sref->g->num_nodes > 1){ // DO
+    // NOT REMOVE
     if ((mcfg->target_column != UD_MWE || found_at_least_one_mwe) &&
         (mcfg->steps.sentence.enable_count_recompute_step &&
-         (((!mcfg->steps.sentence.use_log10) && mmut->sentence.num % mcfg->steps.sentence.recompute_step == 0) ||
-          (mcfg->steps.sentence.use_log10 && mmut->sentence.num >= mmut->sentence.count_target))) &&
+         (((!mcfg->steps.sentence.use_log10) && mmut->sentence.num_all % mcfg->steps.sentence.recompute_step == 0) ||
+          (mcfg->steps.sentence.use_log10 && mmut->sentence.num_all >= mmut->sentence.count_target))) &&
         sref->g->num_nodes > 1) {
       // printf("found_at_least_one_mwe: %i; g->num_nodes: %lu\n", found_at_least_one_mwe, sref->g->num_nodes);
       memset(log_bfr, '\0', log_bfr_size);
@@ -365,8 +481,10 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
 
       if (mmut->best_s != mmut->prev_best_s || sref->g->num_nodes != ((uint64_t)mmut->prev_num_nodes)) {
         memset(log_bfr, '\0', log_bfr_size);
+        // snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", mmut->best_s,
+        // sref->g->num_nodes, mmut->sentence.num, mmut->document.num); // DO NOT REMOVE
         snprintf(log_bfr, log_bfr_size, "best_s: %f; num_nodes: %lu; num_sentences: %li; num_documents: %li", mmut->best_s,
-                 sref->g->num_nodes, mmut->sentence.num, mmut->document.num);
+                 sref->g->num_nodes, mmut->sentence.num_all, mmut->document.num_all);
         info_format(__FILE__, __func__, __LINE__, log_bfr);
 
         err = apply_diversity_functions_to_graph(i, mcfg, sref, mmut);
@@ -397,26 +515,43 @@ int32_t cupt_to_graph(const uint64_t i, const char *const filename, struct measu
     pthread_mutex_unlock(&mmut->mutex);
 
     if (iterate_cupt_sentence_iterator(&csi) != 0) {
-      perror("failed to call iterate_cupt_sentence_iterator\n");
-      return 1;
+      goto failure_iterate_cupt_sentence_iterator;
+    }
+    if (filename_tp != NULL) {
+      if (iterate_cupt_sentence_iterator(&csi_tp) != 0) {
+        goto failure_iterate_cupt_sentence_iterator;
+      }
     }
   }
 
   free_cupt_sentence_iterator(&csi);
+  if (filename_tp != NULL) {
+    free_cupt_sentence_iterator(&csi_tp);
+  }
 
   return 0;
+
+failure_iterate_cupt_sentence_iterator:
+  perror("failed to call iterate_cupt_sentence_iterator\n");
+  goto panic_exit;
+
+failure_create_cupt_sentence_iterator:
+  perror("failed to call create_cupt_sentence_iterator\n");
 
 panic_exit:
 
   free_cupt_sentence_iterator(&csi);
+  if (filename_tp != NULL) {
+    free_cupt_sentence_iterator(&csi_tp);
+  }
 
   return 1;
 }
 
 void *cupt_to_graph_thread(void *args) {
   if (cupt_to_graph(((struct measurement_file_thread *)args)->i, ((struct measurement_file_thread *)args)->filename,
-                    ((struct measurement_file_thread *)args)->mcfg, ((struct measurement_file_thread *)args)->sref,
-                    ((struct measurement_file_thread *)args)->mmut) != 0) {
+                    ((struct measurement_file_thread *)args)->filename_tp, ((struct measurement_file_thread *)args)->mcfg,
+                    ((struct measurement_file_thread *)args)->sref, ((struct measurement_file_thread *)args)->mmut) != 0) {
     perror("Failed to call cupt_to_graph in cupt_to_graph_thread\n");
     exit(1);
   }

@@ -458,8 +458,12 @@ int32_t apply_diversity_functions_to_graph(const uint64_t i, struct measurement_
 
     double mu_dist = sum / ((double)(sref->g->num_nodes * (sref->g->num_nodes - 1) / 2));
 
-    fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i + 1, mmut->sentence.num,
-            mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+    // fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i+1, mmut->sentence.num,
+    // mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+    // sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes, mu_dist,
+    // '?'); // recomputing sigma dist would be expensive // DO NOT REMOVE
+    fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%c", i + 1, mmut->sentence.num_containing_mwe,
+            mmut->sentence.num_containing_mwe_tp_only, mmut->sentence.num_all, mmut->document.num_all, mcfg->io.w2v_path,
             sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes,
             mu_dist, '?'); // recomputing sigma dist would be expensive
 
@@ -500,16 +504,24 @@ int32_t apply_diversity_functions_to_graph(const uint64_t i, struct measurement_
     int64_t ns_delta, virtual_mem;
 
     if (mcfg->io.enable_output_timing) {
-      fprintf(mcfg->io.f_timing_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i + 1, mmut->sentence.num,
-              mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+      // fprintf(mcfg->io.f_timing_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, mmut->sentence.num,
+      // mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+      // sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes); // DO NOT
+      // REMOVE
+      fprintf(mcfg->io.f_timing_ptr, "%lu\t%li\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i + 1, mmut->sentence.num_containing_mwe,
+              mmut->sentence.num_containing_mwe_tp_only, mmut->sentence.num_all, mmut->document.num_all, mcfg->io.w2v_path,
               sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes);
       if (time_ns_delta(NULL) != 0) {
         goto time_ns_delta_failure;
       }
     }
     if (mcfg->io.enable_output_memory) {
-      fprintf(mcfg->io.f_memory_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i + 1, mmut->sentence.num,
-              mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+      // fprintf(mcfg->io.f_memory_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i+1, mmut->sentence.num,
+      // mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+      // sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes); // DO NOT
+      // REMOVE
+      fprintf(mcfg->io.f_memory_ptr, "%lu\t%li\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu", i + 1, mmut->sentence.num_containing_mwe,
+              mmut->sentence.num_containing_mwe_tp_only, mmut->sentence.num_all, mmut->document.num_all, mcfg->io.w2v_path,
               sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes);
     }
 
@@ -650,8 +662,13 @@ int32_t apply_diversity_functions_to_graph(const uint64_t i, struct measurement_
       }
     }
 
-    fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i + 1, mmut->sentence.num,
-            mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+    // fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i+1, mmut->sentence.num,
+    // mmut->sentence.num_all, mmut->document.num, mcfg->io.w2v_path,
+    // sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes, mu_dist,
+    // sigma_dist); // DO NOT REMOVE
+    fprintf(mcfg->io.f_ptr, "%lu\t%li\t%li\t%li\t%li\t%s\t%li\t%.10e\t%lu\t%.10e\t%.10e", i + 1,
+            mmut->sentence.num_containing_mwe, mmut->sentence.num_containing_mwe_tp_only, mmut->sentence.num_all,
+            mmut->document.num_all, mcfg->io.w2v_path,
             sref->sorted_array_discarded_because_not_in_vector_database->num_elements, mmut->best_s, sref->g->num_nodes,
             mu_dist, sigma_dist);
 
