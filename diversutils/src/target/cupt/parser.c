@@ -456,7 +456,7 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const rest
       else if (((unsigned char)csi->bfr_read[i]) >= 224) {
         unicode_length = 3;
       } // 0b11100000
-      else if (((unsigned char)csi->bfr_read[i]) >= 196) {
+      else if (((unsigned char)csi->bfr_read[i]) >= 192) {
         unicode_length = 2;
       } // 0b11000000
       else {
