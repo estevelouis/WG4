@@ -439,17 +439,10 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const rest
     int32_t i = 0;
     while (i < FILE_READ_BUFFER_SIZE) {
       if (csi->bfr_read[i] == '\0') {
-        // if(i < FILE_READ_BUFFER_SIZE - 1 && csi->bfr_read[i + 1] != '\0'){i++; continue;}
         break;
       }
 
       int32_t unicode_length = 1;
-      /*
-      if(((unsigned char) csi->bfr_read[i]) >= 0b00000000 && ((unsigned char) csi->bfr_read[i]) < 0b11000000){unicode_length =
-      1;} else if(((unsigned char) csi->bfr_read[i]) >= 0b11000000 && ((unsigned char) csi->bfr_read[i]) <
-      0b11100000){unicode_length = 2;} else if(((unsigned char) csi->bfr_read[i]) >= 0b11100000 && ((unsigned char)
-      csi->bfr_read[i]) < 0b11110000){unicode_length = 3;} else {unicode_length = 4;}
-      */
       if (((unsigned char)csi->bfr_read[i]) >= 240) {
         unicode_length = 4;
       } // 0b11110000
@@ -496,7 +489,8 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const rest
               return 1;
             }
           } else {
-            fprintf(stderr, "Failed to parse a token; csi->bfr_read: %s\n", csi->bfr_read);
+            fprintf(stderr, "Failed to parse a token; current_column (%i) < 9; csi->bfr_read: %s\n", current_column,
+                    csi->bfr_read);
           }
 
           memset(id_raw, '\0', TOKEN_ID_RAW_SIZE);
@@ -521,7 +515,8 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const rest
           current_index_in_column++;
         }
       } else {
-        if (current_index_in_column + (unicode_length - 1) < column_sizes[current_column] - 1) {
+        if (current_index_in_column + (unicode_length - 1) < column_sizes[current_column] - 1 &&
+            i + unicode_length < FILE_READ_BUFFER_SIZE) {
           for (int32_t j = 0; j < unicode_length; j++) {
             columns[current_column][current_index_in_column + j] = csi->bfr_read[i + j];
           }
@@ -529,6 +524,9 @@ int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const rest
         current_index_in_column += unicode_length;
       }
 
+      if (unicode_length == 1 && csi->bfr_read[i] == '\r' && csi->bfr_read[i + 1] == '\n') {
+        i++;
+      } // to handle CRLF
       i += unicode_length;
     }
     memset(csi->bfr_read, '\0', FILE_READ_BUFFER_SIZE);

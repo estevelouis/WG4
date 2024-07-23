@@ -11,10 +11,11 @@
 ifeq ($(origin DIVERSUTILS_WORK_PATH), undefined)
     DIVERSUTILS_WORK_PATH=.
 endif
-$(info $(shell echo "INFO: Building with diversutils at \033[1m\033[35m$(DIVERSUTILS_WORK_PATH)\033[0m."))
+#$(info $(shell echo -e "INFO: Building with diversutils at \033[1m\033[35m$(DIVERSUTILS_WORK_PATH)\033[0m."))
 
 ifneq ($(VERBOSE), 1)
     .SILENT:
+    VERBOSE = 0
 endif
 
 # -------------
@@ -29,7 +30,7 @@ ifeq ($(PEDANTIC), 1)
 else
     PEDANTIC=0
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mPEDANTIC=$(PEDANTIC)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mPEDANTIC=$(PEDANTIC)\033[0m."))
 
 # security
 # ----------
@@ -39,7 +40,7 @@ ifeq ($(HARDEN), 1)
 else
     HARDEN=0
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mHARDEN=$(HARDEN)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mHARDEN=$(HARDEN)\033[0m."))
 
 # optimisation
 # ------------
@@ -54,7 +55,7 @@ OPT_LEVEL_COMPACT_OPTIM = -Oz
 ifneq ($(COMPACT), 1)
     COMPACT=0
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mCOMPACT=$(COMPACT)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mCOMPACT=$(COMPACT)\033[0m."))
 
 ifeq ($(OPTIM), 1)
     FAST_MATH_FLAG = -ffast-math
@@ -71,7 +72,7 @@ else
         OPT_LEVEL = $(OPT_LEVEL_STANDARD)
     endif
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mOPTIM=$(OPTIM)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mOPTIM=$(OPTIM)\033[0m."))
 
 ifeq ($(DEBUG), 1)
     DEBUG_FLAG = -DDEBUG -g3
@@ -80,7 +81,7 @@ else
     DEBUG=0
     DEBUG_FLAG = -DNDEBUG
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mDEBUG=$(DEBUG)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mDEBUG=$(DEBUG)\033[0m."))
 
 # tokenization
 # ------------
@@ -99,7 +100,7 @@ ifeq ($(PYTHON_BUILD), 1)
     TOKENIZATION_METHOD = 0 # REGEX
 endif
 
-$(info $(shell echo "INFO: Building with \033[1m\033[35mTOKENIZATION_METHOD=$(TOKENIZATION_METHOD)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mTOKENIZATION_METHOD=$(TOKENIZATION_METHOD)\033[0m."))
 
 # language standard
 # -----------------
@@ -111,13 +112,13 @@ else
     LEGACY_COMPILER = 0
     CXX_VERSION = -std=c++20
 endif
-$(info $(shell echo "INFO: Building with \033[1m\033[35mLEGACY_COMPILER=$(LEGACY_COMPILER)\033[0m."))
+#$(info $(shell echo "INFO: Building with \033[1m\033[35mLEGACY_COMPILER=$(LEGACY_COMPILER)\033[0m."))
 
 # architecture
 # ------------
 
 ifeq ($(NATIVE), 1)
-    $(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m (i.e., for current machine only)."))
+    #$(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m (i.e., for current machine only)."))
     NATIVE_FLAG = -march=native
     ifeq ($(AVX), 0)
         $(info $(shell echo "INFO: Ignoring AVX, as it has been set to 0."))
@@ -143,7 +144,7 @@ ifeq ($(NATIVE), 1)
     endif
 else
     NATIVE=0
-    $(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m."))
+    #$(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m."))
     ifeq ($(AVX), 1)
         $(warning $(shell echo "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
     endif
@@ -187,23 +188,50 @@ else
     endif
 endif
 
+# ------------------
+# DISPLAY PARAMETERS
+# ------------------
+
+LIST_PARAMETERS = DIVERSUTILS_WORK_PATH PEDANTIC HARDEN COMPACT OPTIM DEBUG TOKENIZATION_METHOD C_VERSION CXX_VERSION NATIVE LEGACY_COMPILER COMPILER CC CCPP PCRE2_CODE_UNIT_WIDTH VERBOSE
+doit:
+	#$(foreach param,$(LIST_PARAMETERS), $(info $(shell echo "$(param)")))
+	#$(foreach param,$(LIST_PARAMETERS), $(shell echo "$(param)"))
+	$(foreach param,$(LIST_PARAMETERS), echo "$(param)")
+
+#$(foreach param,$(LIST_PARAMETERS), $(info test)) # works
+#$(foreach param,$(LIST_PARAMETERS), $(info $(param))) 
+#$(foreach param,$(LIST_PARAMETERS), $(info INFO: Building with $(param)=$($(param)))) 
+#$(foreach param,$(LIST_PARAMETERS), $(info INFO: Building with \033[1m\033[33m$(param)\033[0m=\033[1m\033[33m$($(param))\033[0m)) 
+$(foreach param,$(LIST_PARAMETERS), $(info $(shell echo "INFO: Building with \033[1m\033[35m$(param)\033[0m=\033[1m\033[35m$($(param))\033[0m"))) 
+
 # -----------------
 # COMPILING OPTIONS
 # -----------------
 
+PCRE2_VERSION="10.44"
+ifeq ($(ENABLE_FILTER), 1)
+    PCRE2_SRC=other_lib/pcre2-$(PCRE2_VERSION)/src
+    PCRE2_SRC_INCLUSION=-I$(PCRE2_SRC)
+    PCRE2_LIB_INCLUSION=-L$(PCRE2_SRC)
+endif
+
+
 CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(HARDEN_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
-CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include
+CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include $(PCRE2_SRC_INCLUSION)
 CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
 CPPFLAGS_TEST = $(CPPFLAGS) -I$(DIVERSUTILS_WORK_PATH)/test/include
 PATH_LIB_DIVERSUTILS = $(HOME)/.local/lib/diversutils
-LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu
+LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu $(PCRE2_LIB_INCLUSION)
 ifeq ($(origin CONDA_PREFIX), undefined)
     LDFLAGS = $(LDFLAGS_MINIMUM)
 else
     LDFLAGS = -L$(CONDA_PREFIX)/lib $(LDFLAGS_MINIMUM)
 endif
 PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
-LINKER_FLAGS = -lc -lm -lrt -lpcre2-$(PCRE2_CODE_UNIT_WIDTH) -pthread
+ifeq ($(ENABLE_FILTER), 1)
+    LINKER_FLAG_PCRE2=-lpcre2-$(PCRE2_CODE_UNIT_WIDTH)
+endif
+LINKER_FLAGS = -lc -lm -lrt $(LINKER_FLAG_PCRE2) -pthread
 LINKER_FLAG_CXX = -lstdc++
 LINKER_FLAG_UDPIPE = -ludpipe
 LINKER_FLAG_DIVERSUTILS = -ldiversutils
@@ -305,10 +333,14 @@ OUTPUT_PATH = \"measurement_output.tsv\"
 OUTPUT_PATH_TIMING = \"measurement_output_timing.tsv\"
 OUTPUT_PATH_MEMORY = \"measurement_output_memory.tsv\"
 
-#W2V_PATH = \"path/to/a/word2vec/formatted/file\"
-#W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin\"
-#W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/final/MWE_S2S_PL_typed_100d_skip-gram.bin\"
-W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_PL_raw_001-004_skip-gram_100d_typed.bin\"
+ifeq ($(origin W2V_PATH), undefined)
+    #W2V_PATH = \"path/to/a/word2vec/formatted/file\"
+    #W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_S2S_IT_11GB_100d_skip-gram.bin\"
+    #W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/final/MWE_S2S_PL_typed_100d_skip-gram.bin\"
+    #W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_PL_raw_001-004_skip-gram_100d_typed.bin\" # PL eval
+    #W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_FR_raw_001-004_v2_skip-gram_100d.bin\"
+    W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_FR_raw_001-004_v3_skip-gram_100d.bin\" # FR eval
+endif
 
 #TARGET_COLUMN = UD_FORM
 #TARGET_COLUMN = UD_LEMMA
@@ -319,6 +351,8 @@ ifeq ($(origin ENABLE_TOKEN_UTF8_NORMALISATION), undefined)
 endif
 ifeq ($(origin ENABLE_FILTER), undefined)
     ENABLE_FILTER = 1
+    FILTER_OBJ=$(BLD)/filter.o
+    FILTER_TGT=$(TGT)/filter.c
 endif
 ENABLE_FILTER_ON_JSONL_DOCUMENTS = 1
 
@@ -434,8 +468,8 @@ ifneq ($(TOKENIZATION_METHOD), 0)
     DIVERSUTILS_TOKENIZATION_CXX_OBJECTS = $(BLD)/udpipe/interface.o
 endif
 
-DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(TGT)/filter.c $(TGT)/case.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
-DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(BLD)/filter.o $(BLD)/case.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
+DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(FILTER_TGT) $(TGT)/case.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
+DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(FILTER_BLD) $(BLD)/case.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
 DIVERSUTILS_CXX_OBJECTS = $(DIVERSUTILS_TOKENIZATION_CXX_OBJECTS)
 
 $(DIVERSUTILS_C_OBJECTS) $(BLD)/main_measurement.o: $(BLD)/%.o: $(TGT)/%.c $(BLD)/.placeholder
