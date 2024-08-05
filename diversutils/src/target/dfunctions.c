@@ -134,7 +134,7 @@ void richness_from_graph(const struct graph *const g, double *const res) {
 }
 
 void species_count_from_graph(const struct graph *const g, double *const res) {
-  (*res) = (double)(g->num_nodes - 1);
+  (*res) = ((double)g->num_nodes) - 1.0;
 }
 
 void hill_number_standard_from_graph(const struct graph *const g, double *const res, double alpha) {
