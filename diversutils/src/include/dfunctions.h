@@ -59,6 +59,7 @@ void sw_o_bulla1994_from_graph(const struct graph *const, double *const);
 void sw_e_bulla1994_from_graph(const struct graph *const, double *const);
 void sw_e_mci_pielou1969_from_graph(const struct graph *const, double *const);
 void sw_e_var_smith_and_wilson1996_original_from_graph(const struct graph *const, double *const);
+void type_token_ratio_from_graph(const struct graph *const, double *const);
 
 void sw_e_prime_camargo1993_from_graph(const struct graph *const, double *const);
 struct sw_e_prime_camargo1993_thread_args {

@@ -213,6 +213,15 @@ void mcintosh_index_from_graph(const struct graph *const g, double *const res) {
   (*res) = 1.0 - pow(sum, 0.5);
 }
 
+void type_token_ratio_from_graph(const struct graph *const g, double *const res) {
+  uint64_t type_count = (uint64_t)g->num_nodes;
+  uint64_t token_count = 0;
+  for (uint64_t i = 0; i < g->num_nodes; i++) {
+    token_count += (uint64_t)g->nodes[i].absolute_proportion;
+  }
+  *res = ((double)type_count) / ((double)token_count);
+}
+
 void sw_entropy_over_log_n_species_pielou1975_from_graph(const struct graph *const g, double *const res) {
   // should it necessarily be logarithmic of base e?
   shannon_evenness_from_graph(g, res);

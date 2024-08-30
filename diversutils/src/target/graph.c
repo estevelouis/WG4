@@ -2667,7 +2667,9 @@ int32_t ricotta_szeidl_from_graph(struct graph *const g, double *const result, c
       }
       local_result += product;
     } else {
-      local_result += g->nodes[i].relative_proportion * log(local_sum);
+      if (local_sum != 0.0) {
+        local_result += g->nodes[i].relative_proportion * log(local_sum);
+      }
     }
   }
 

@@ -289,7 +289,11 @@ int32_t jsonl_document_iterator_request_more_capacity_current_line(struct jsonl_
 
 int32_t create_jsonl_document_iterator(struct jsonl_document_iterator *jdi, const char *file_name,
                                        const char *const content_key) {
-  jdi->file_ptr = fopen(file_name, "r");
+  if (strcmp(file_name, "-") == 0) {
+    jdi->file_ptr = stdin;
+  } else {
+    jdi->file_ptr = fopen(file_name, "r");
+  }
   if (jdi->file_ptr == NULL) {
     fprintf(stderr, "[err] failed to open file (%s); errno: %i\n", file_name, errno);
     return 1;
@@ -328,7 +332,9 @@ int32_t create_jsonl_document_iterator(struct jsonl_document_iterator *jdi, cons
 
 void free_jsonl_document_iterator(struct jsonl_document_iterator *jdi) {
   free_document(&(jdi->current_document));
-  fclose(jdi->file_ptr);
+  if (jdi->file_ptr != stdin) {
+    fclose(jdi->file_ptr);
+  }
   free(jdi->current_line);
 }
 

@@ -67,7 +67,7 @@ int32_t jsonl_to_graph(const uint64_t i, const char *const filename, struct meas
       continue;
     }
 
-#if ENABLE_FILTER_ON_JSONL_DOCUMENTS == 1
+#if (ENABLE_FILTER == 1 && ENABLE_FILTER_ON_JSONL_DOCUMENTS == 1)
     if (filter_substitute_all(&jdi.current_document.text, &jdi.current_document.text_size)) {
       perror("failed to call filter_substitute_all\n");
       return 1;

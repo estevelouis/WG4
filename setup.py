@@ -17,7 +17,7 @@ setup(
     author="Louis Estève",
     author_email="louis.esteve@universite-paris-saclay.fr",
     description="DiversUtils - Functions to measure diversity",
-    version="0.1.11",
+    version="0.2.0",
     packages=["diversutils"],
     package_dir={"diversutils": "diversutils/diversutils"},
     ext_modules = [

@@ -274,7 +274,12 @@ int32_t serialize_sentence(struct sentence *const s, char *const bfr, int32_t *c
 int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator *const csi, const char *const file_name) {
   int32_t err = 0;
 
-  FILE *fp = fopen(file_name, "r");
+  FILE *fp;
+  if (strcmp(file_name, "-") == 0) {
+    fp = stdin;
+  } else {
+    fp = fopen(file_name, "r");
+  }
   if (fp == NULL) {
     perror("failed to open file\n");
     printf("errno: %i\n", errno);
@@ -302,7 +307,9 @@ int32_t create_cupt_sentence_iterator(struct cupt_sentence_iterator *const csi, 
 
 void free_cupt_sentence_iterator(struct cupt_sentence_iterator *const csi) {
   free_sentence(&(csi->current_sentence));
-  fclose(csi->file_ptr);
+  if (csi->file_ptr != stdin) {
+    fclose(csi->file_ptr);
+  }
 }
 
 int32_t iterate_cupt_sentence_iterator(struct cupt_sentence_iterator *const restrict csi) {
