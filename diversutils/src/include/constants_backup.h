@@ -25,15 +25,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GENERAL_CONSTANTS_H
+#ifndef CUPT_CONSTANTS_H
+#define CUPT_CONSTANTS_H
 
-#ifndef PI
-#define PI 3.141592653589793
-#endif
+#include<stdint.h>
 
+const int32_t TOKEN_BUFFER_SIZE = 32;
+const int32_t SENTENCE_BUFFER_SIZE = 128;
 
-#ifndef E
-#define E 2.718281828459045
-#endif
+const int32_t TOKEN_ID_RAW_SIZE = 16;
+const int32_t TOKEN_FORM_SIZE = 32;
+const int32_t TOKEN_LEMMA_SIZE = 32;
+const int32_t TOKEN_UPOS_SIZE = 16;
+const int32_t TOKEN_XPOS_SIZE = 16;
+const int32_t TOKEN_FEATS_SIZE = 64;
+const int32_t TOKEN_DEPREL_SIZE = 32;
+const int32_t TOKEN_DEPS_SIZE = 64;
+const int32_t TOKEN_MWE_SIZE = 32;
 
 #endif

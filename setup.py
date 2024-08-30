@@ -17,7 +17,7 @@ setup(
     author="Louis Estève",
     author_email="louis.esteve@universite-paris-saclay.fr",
     description="DiversUtils - Functions to measure diversity",
-    version="0.1.11",
+    version="0.4.0",
     packages=["diversutils"],
     package_dir={"diversutils": "diversutils/diversutils"},
     ext_modules = [
@@ -28,7 +28,7 @@ setup(
             define_macros=[("ENABLE_AVX256", "0"), ("ENABLE_AVX512", "0"), ("TOKENIZATION_METHOD", "0")],
             library_dirs=[f"{os.environ['HOME']}/.local/lib/diversutils"] if ENABLE_LIB or ENABLE_UDPIPE else [],
             libraries=["m", "rt"] + (["diversutils"] if ENABLE_LIB else []) + (["udpipe"] if ENABLE_UDPIPE else []),
-            extra_compile_args=["-g3", "-Wall", "-Wextra", "-std=c99", "-pthread", "-pedantic", "-Werror", "-fstack-protector-all"]
+            extra_compile_args=["-DPYTHON_BUILD=1", "-g3", "-DDEBUG", "-Wall", "-Wextra", "-std=c99", "-pthread", "-pedantic", "-fstack-protector-all"]
         )
     ]
 )
