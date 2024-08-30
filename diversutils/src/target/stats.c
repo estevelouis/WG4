@@ -25,69 +25,72 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <math.h>
 #include <stdint.h>
+#include <math.h>
 
-float avg_fp32(const float *p, const int32_t n) {
-  float sum = 0.0f;
-  for (int32_t i = 0; i < n; i++) {
-    sum += p[i];
-  }
-  sum /= (float)n;
-  return sum;
+#include "stats.h"
+
+float avg_fp32(const float* p, const int32_t n){
+	float sum = 0.0f;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += p[i];
+	}
+	sum /= (float) n;
+	return sum;
 }
 
-float std_fp32(const float *p, const int32_t n) {
-  float avg = avg_fp32(p, n);
-  float sum = 0.0f;
-  for (int32_t i = 0; i < n; i++) {
-    sum += powf(p[i] - avg, 2.0f);
-  }
-  sum /= (float)n;
-  float result = powf(sum, 0.5f);
-  return result;
+float std_fp32(const float* p, const int32_t n){
+	float avg = avg_fp32(p, n);
+	float sum = 0.0f;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += powf(p[i] - avg, 2.0f);
+	}
+	sum /= (float) n;
+	float result = powf(sum, 0.5f);
+	return result;
 }
 
-void avg_and_std_fp32(const float *p, const int32_t n, float *avg_p, float *std_p) {
-  float avg = avg_fp32(p, n);
-  float sum = 0.0f;
-  for (int32_t i = 0; i < n; i++) {
-    sum += powf(p[i] - avg, 2.0f);
-  }
-  sum /= (float)n;
-  float result = powf(sum, 0.5f);
-  (*avg_p) = avg;
-  (*std_p) = result;
+void avg_and_std_fp32(const float* p, const int32_t n, float* avg_p, float* std_p){
+	float avg = avg_fp32(p, n);
+	float sum = 0.0f;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += powf(p[i] - avg, 2.0f);
+	}
+	sum /= (float) n;
+	float result = powf(sum, 0.5f);
+	(*avg_p) = avg;
+	(*std_p) = result;
 }
 
-double avg_fp64(const double *p, const int32_t n) {
-  double sum = 0.0;
-  for (int32_t i = 0; i < n; i++) {
-    sum += p[i];
-  }
-  sum /= (double)n;
-  return sum;
+double avg_fp64(const double* p, const int32_t n){
+	double sum = 0.0;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += p[i];
+	}
+	sum /= (double) n;
+	return sum;
 }
 
-double std_fp64(const double *p, const int32_t n) {
-  double avg = avg_fp64(p, n);
-  double sum = 0.0;
-  for (int32_t i = 0; i < n; i++) {
-    sum += pow(p[i] - avg, 2.0);
-  }
-  sum /= (double)n;
-  double result = pow(sum, 0.5);
-  return result;
+double std_fp64(const double* p, const int32_t n){
+	double avg = avg_fp64(p, n);
+	double sum = 0.0;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += pow(p[i] - avg, 2.0);
+	}
+	sum /= (double) n;
+	double result = pow(sum, 0.5);
+	return result;
 }
 
-void avg_and_std_fp64(const double *p, const int32_t n, double *avg_p, double *std_p) {
-  double avg = avg_fp64(p, n);
-  double sum = 0.0;
-  for (int32_t i = 0; i < n; i++) {
-    sum += pow(p[i] - avg, 2.0);
-  }
-  sum /= (double)n;
-  double result = pow(sum, 0.5);
-  (*avg_p) = avg;
-  (*std_p) = result;
+void avg_and_std_fp64(const double* p, const int32_t n, double* avg_p, double* std_p){
+	double avg = avg_fp64(p, n);
+	double sum = 0.0;
+	for(int32_t i = 0 ; i < n ; i++){
+		sum += pow(p[i] - avg, 2.0);
+	}
+	sum /= (double) n;
+	double result = pow(sum, 0.5);
+	(*avg_p) = avg;
+	(*std_p) = result;
 }
+

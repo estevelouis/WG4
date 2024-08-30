@@ -28,24 +28,25 @@
 #ifndef CUPT_CONSTANTS_H
 #define CUPT_CONSTANTS_H
 
-#include <stdint.h>
+#include<stdint.h>
 
 enum {
-  UD_ID = 0,
-  UD_FORM = 1,
-  UD_LEMMA = 2,
-  UD_UPOS = 3,
-  UD_XPOS = 4,
-  UD_FEATS = 5,
-  UD_HEAD = 6,
-  UD_DEPREL = 7,
-  UD_DEPS = 8,
-  UD_MISC = 9,
-  UD_MWE = 10,
+    UD_ID     = 0,
+	UD_FORM   = 1,
+	UD_LEMMA  = 2,
+    UD_UPOS   = 3,
+    UD_XPOS   = 4,
+    UD_FEATS  = 5,
+    UD_HEAD   = 6,
+    UD_DEPREL = 7,
+    UD_DEPS   = 8,
+    UD_MISC   = 9,
+	UD_MWE    = 10,
 };
 
 #define TOKEN_ID_RAW_SIZE 16
-#define TOKEN_FORM_SIZE 64
+// #define TOKEN_FORM_SIZE 64
+#define TOKEN_FORM_SIZE 2048
 #define TOKEN_LEMMA_SIZE 64
 #define TOKEN_UPOS_SIZE 8
 #define TOKEN_XPOS_SIZE 32
@@ -56,9 +57,9 @@ enum {
 #define TOKEN_MISC_SIZE 32
 #define TOKEN_MWE_SIZE 32
 
-#define TOKEN_SERIALIZE_SIZE                                                                                                   \
-  (TOKEN_ID_RAW_SIZE + TOKEN_FORM_SIZE + TOKEN_LEMMA_SIZE + TOKEN_UPOS_SIZE + TOKEN_XPOS_SIZE + TOKEN_FEATS_SIZE +             \
-   TOKEN_HEAD_SIZE + TOKEN_DEPREL_SIZE + TOKEN_DEPS_SIZE + TOKEN_MISC_SIZE + TOKEN_MWE_SIZE + 10 + 1)
+#define TOKEN_SERIALIZE_SIZE (TOKEN_ID_RAW_SIZE + TOKEN_FORM_SIZE + TOKEN_LEMMA_SIZE + TOKEN_UPOS_SIZE + TOKEN_XPOS_SIZE + TOKEN_FEATS_SIZE + TOKEN_HEAD_SIZE + TOKEN_DEPREL_SIZE + TOKEN_DEPS_SIZE + TOKEN_MISC_SIZE + TOKEN_MWE_SIZE + 10 + 1)
+
+
 
 #define SENTENCE_TOKEN_CAPACITY_STEP 16
 /* #define SENTENCE_TOKEN_CAPACITY_STEP 32 */

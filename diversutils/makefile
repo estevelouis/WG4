@@ -11,16 +11,32 @@
 ifeq ($(origin DIVERSUTILS_WORK_PATH), undefined)
     DIVERSUTILS_WORK_PATH=.
 endif
-#$(info $(shell echo -e "INFO: Building with diversutils at \033[1m\033[35m$(DIVERSUTILS_WORK_PATH)\033[0m."))
 
 ifneq ($(VERBOSE), 1)
     .SILENT:
     VERBOSE = 0
 endif
 
+# ---------------
+# Shell detection
+# ---------------
+
+ifeq ($(origin SHELL), undefined)
+	SHELL_COLOR_ARG=""
+else ifeq ($(SHELL), "/bin/sh")
+	SHELL_COLOR_ARG=" -e"
+else
+	SHELL_COLOR_ARG=""
+endif
+
 # -------------
 # CLI arguments
 # -------------
+
+# standard
+# --------
+
+STD?=c99
 
 # conformity
 # ----------
@@ -30,7 +46,18 @@ ifeq ($(PEDANTIC), 1)
 else
     PEDANTIC=0
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mPEDANTIC=$(PEDANTIC)\033[0m."))
+
+# profiling
+# ---------
+
+ifeq ($(PROFILING), 1)
+    PROFILING_FLAG=-pg -static
+    #LC_FLAG=-lc_p
+    LC_FLAG=-lc
+else
+    PROFILING=0
+    LC_FLAG=-lc
+endif
 
 # security
 # ----------
@@ -40,7 +67,6 @@ ifeq ($(HARDEN), 1)
 else
     HARDEN=0
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mHARDEN=$(HARDEN)\033[0m."))
 
 # optimisation
 # ------------
@@ -55,7 +81,6 @@ OPT_LEVEL_COMPACT_OPTIM = -Oz
 ifneq ($(COMPACT), 1)
     COMPACT=0
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mCOMPACT=$(COMPACT)\033[0m."))
 
 ifeq ($(OPTIM), 1)
     FAST_MATH_FLAG = -ffast-math
@@ -72,16 +97,16 @@ else
         OPT_LEVEL = $(OPT_LEVEL_STANDARD)
     endif
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mOPTIM=$(OPTIM)\033[0m."))
 
 ifeq ($(DEBUG), 1)
     DEBUG_FLAG = -DDEBUG -g3
     OPT_LEVEL = $(OPT_LEVEL_DEBUG)
+    FLAGLTO = 
 else
     DEBUG=0
     DEBUG_FLAG = -DNDEBUG
+    FLAGLTO = -flto
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mDEBUG=$(DEBUG)\033[0m."))
 
 # tokenization
 # ------------
@@ -100,53 +125,59 @@ ifeq ($(PYTHON_BUILD), 1)
     TOKENIZATION_METHOD = 0 # REGEX
 endif
 
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mTOKENIZATION_METHOD=$(TOKENIZATION_METHOD)\033[0m."))
+# tokenization
+# ------------
+
+ifeq ($(origin ENABLE_UDPIPE_PARSING), undefined)
+    ENABLE_UDPIPE_PARSING = 0
+endif
+
+ifeq ($(PYTHON_BUILD), 1)
+    ENABLE_UDPIPE_PARSING = 0
+endif
 
 # language standard
 # -----------------
 
-C_VERSION = -std=c99
+C_VERSION = -std=$(STD)
 ifeq ($(LEGACY_COMPILER), 1)
     CXX_VERSION = -std=c++11
 else
     LEGACY_COMPILER = 0
     CXX_VERSION = -std=c++20
 endif
-#$(info $(shell echo "INFO: Building with \033[1m\033[35mLEGACY_COMPILER=$(LEGACY_COMPILER)\033[0m."))
 
 # architecture
 # ------------
 
 ifeq ($(NATIVE), 1)
-    #$(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m (i.e., for current machine only)."))
     NATIVE_FLAG = -march=native
     ifeq ($(AVX), 0)
         $(info $(shell echo "INFO: Ignoring AVX, as it has been set to 0."))
         ENABLE_AVX256 = 0
         ENABLE_AVX512 = 0
     else
-        $(info $(shell echo "INFO: Trying to activate AVX ..."))
+        $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: Trying to activate AVX ..."))
         ifeq ($(grep avx2 /proc/cpuinfo), "")
-            $(info $(shell echo "INFO: AVX256 \033[1m\033[31mcannot be\033[0m activated."))
+            $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: AVX256 \033[1m\033[31mcannot be\033[0m activated."))
             ENABLE_AVX256 = 0
         else
-            $(info $(shell echo "INFO: AVX256 \033[1m\033[32mcan be\033[0m activated. Activating."))
+            $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: AVX256 \033[1m\033[32mcan be\033[0m activated. Activating."))
             ENABLE_AVX256 = 1
         endif
         
         ifeq ($(grep avx512 /proc/cpuinfo), "")
-            $(info $(shell echo "INFO: AVX512 \033[1m\033[31mcannot be\033[0m activated."))
+            $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: AVX512 \033[1m\033[31mcannot be\033[0m activated."))
             ENABLE_AVX512 = 0
         else
-            $(info $(shell echo "INFO: AVX512 \033[1m\033[32mcan be\033[0m activated. Activating."))
+            $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: AVX512 \033[1m\033[32mcan be\033[0m activated. Activating."))
             ENABLE_AVX512 = 1
         endif
     endif
 else
     NATIVE=0
-    #$(info $(shell echo "INFO: Building with \033[1m\033[35mNATIVE=$(NATIVE)\033[0m."))
     ifeq ($(AVX), 1)
-        $(warning $(shell echo "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
+        $(warning $(shell echo$(SHELL_COLOR_ARG) "WARNING: AVX was to 1 without NATIVE being set to 1. Ignoring."))
     endif
     ENABLE_AVX256 = 0
     ENABLE_AVX512 = 0
@@ -172,43 +203,40 @@ else ifeq ($(COMPILER), CC)
     CC = cc
     CCPP = c++
 else
-    $(info $(shell echo "INFO: Trying to detect compiler ..."))
-    ifneq ($(shell which gcc), "")
-        $(info $(shell echo "INFO: Detected GNU compiler"))
-        CC = gcc
-        CCPP = g++
-    else ifneq ($(shell which clang), "")
-        $(info $(shell echo "INFO: Detected LLVM compiler"))
-        CC = clang
-        CCPP = clang++
-    else ifneq ($(shell which cc), "")
-        $(info $(shell echo "INFO: Detected CC compiler"))
-        CC = cc
-        CCPP = c++
-    endif
+    $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: Trying to detect compiler ..."))
+    CC=$(shell which icx icc aocc gcc clang cc | sed 's/ /\n/g' | head -n 1)
+    CCPP=$(shell which icx icc aocc g++ clang++ cc++ | sed 's/ /\n/g' | head -n 1)
+endif
+
+# filter
+# ------
+
+ifeq ($(origin ENABLE_FILTER), undefined)
+    ENABLE_FILTER = 1
+else
+    ENABLE_FILTER = 0
+endif
+
+# sorted_array
+# ------------
+
+ifeq ($(origin SORTED_ARRAY_METHOD), undefined)
+    SORTED_ARRAY_METHOD = SORTED_ARRAY_METHOD_LINEAR
 endif
 
 # ------------------
 # DISPLAY PARAMETERS
 # ------------------
 
-LIST_PARAMETERS = DIVERSUTILS_WORK_PATH PEDANTIC HARDEN COMPACT OPTIM DEBUG TOKENIZATION_METHOD C_VERSION CXX_VERSION NATIVE LEGACY_COMPILER COMPILER CC CCPP PCRE2_CODE_UNIT_WIDTH VERBOSE
-doit:
-	#$(foreach param,$(LIST_PARAMETERS), $(info $(shell echo "$(param)")))
-	#$(foreach param,$(LIST_PARAMETERS), $(shell echo "$(param)"))
-	$(foreach param,$(LIST_PARAMETERS), echo "$(param)")
+LIST_PARAMETERS = DIVERSUTILS_WORK_PATH PEDANTIC HARDEN COMPACT OPTIM DEBUG TOKENIZATION_METHOD C_VERSION CXX_VERSION NATIVE LEGACY_COMPILER COMPILER CC CCPP PCRE2_CODE_UNIT_WIDTH VERBOSE ENABLE_FILTER PROFILING SORTED_ARRAY_METHOD
 
-#$(foreach param,$(LIST_PARAMETERS), $(info test)) # works
-#$(foreach param,$(LIST_PARAMETERS), $(info $(param))) 
-#$(foreach param,$(LIST_PARAMETERS), $(info INFO: Building with $(param)=$($(param)))) 
-#$(foreach param,$(LIST_PARAMETERS), $(info INFO: Building with \033[1m\033[33m$(param)\033[0m=\033[1m\033[33m$($(param))\033[0m)) 
-$(foreach param,$(LIST_PARAMETERS), $(info $(shell echo "INFO: Building with \033[1m\033[35m$(param)\033[0m=\033[1m\033[35m$($(param))\033[0m"))) 
+$(foreach param,$(LIST_PARAMETERS), $(info $(shell echo$(SHELL_COLOR_ARG) "INFO: Building with \033[1m\033[35m$(param)\033[0m=\033[1m\033[35m$($(param))\033[0m"))) 
 
 # -----------------
 # COMPILING OPTIONS
 # -----------------
 
-PCRE2_VERSION="10.44"
+PCRE2_VERSION=10.44
 ifeq ($(ENABLE_FILTER), 1)
     PCRE2_SRC=other_lib/pcre2-$(PCRE2_VERSION)/src
     PCRE2_SRC_INCLUSION=-I$(PCRE2_SRC)
@@ -216,12 +244,12 @@ ifeq ($(ENABLE_FILTER), 1)
 endif
 
 
-CFLAGS = -Wall -Wextra -Wformat -Wformat-security $(PEDANTIC_FLAG) $(HARDEN_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG)
-CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include $(PCRE2_SRC_INCLUSION)
+CFLAGS = -Wall -Wextra -Wformat -Wformat-security -MMD $(PEDANTIC_FLAG) $(HARDEN_FLAG) $(NATIVE_FLAG) $(FAST_MATH_FLAG) $(DEBUG_FLAG) $(PROFILING_FLAG)
+CPPFLAGS = -I$(DIVERSUTILS_WORK_PATH)/src/include -I$(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only -I/usr/include -I$(HOME)/.local/include $(PCRE2_SRC_INCLUSION)
 CPPFLAGS_CXX = -I/usr/include/x86_64-linux-gnu/c++/11 -I/usr/include/c++/11
 CPPFLAGS_TEST = $(CPPFLAGS) -I$(DIVERSUTILS_WORK_PATH)/test/include
 PATH_LIB_DIVERSUTILS = $(HOME)/.local/lib/diversutils
-LDFLAGS_MINIMUM = -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu $(PCRE2_LIB_INCLUSION)
+LDFLAGS_MINIMUM = -L$(HOME)/.local/lib -L$(PATH_LIB_DIVERSUTILS) -L/usr/lib/x84_64-linux-gnu $(PCRE2_LIB_INCLUSION)
 ifeq ($(origin CONDA_PREFIX), undefined)
     LDFLAGS = $(LDFLAGS_MINIMUM)
 else
@@ -231,7 +259,7 @@ PYTHON_INCLUDE_FLAG = -I$(HOME)/.local/conda/include/python3.11
 ifeq ($(ENABLE_FILTER), 1)
     LINKER_FLAG_PCRE2=-lpcre2-$(PCRE2_CODE_UNIT_WIDTH)
 endif
-LINKER_FLAGS = -lc -lm -lrt $(LINKER_FLAG_PCRE2) -pthread
+LINKER_FLAGS = $(LC_FLAG) -lm -lrt $(LINKER_FLAG_PCRE2) -pthread
 LINKER_FLAG_CXX = -lstdc++
 LINKER_FLAG_UDPIPE = -ludpipe
 LINKER_FLAG_DIVERSUTILS = -ldiversutils
@@ -241,6 +269,22 @@ else
     LINKER_FLAGS_EXTRA = $(LINKER_FLAG_CXX) $(LINKER_FLAG_UDPIPE)
 endif
 
+# -----
+# PATHS
+# -----
+
+SRC = $(DIVERSUTILS_WORK_PATH)/src
+TGT = $(SRC)/target
+INC = $(SRC)/include
+BLD = $(DIVERSUTILS_WORK_PATH)/build
+BIN = $(DIVERSUTILS_WORK_PATH)/bin
+TST = $(DIVERSUTILS_WORK_PATH)/test
+DEP = $(BLD)/dep
+
+-include $(DEP)/*.d
+-include $(DEP)/*/*.d
+-include $(DEP)/*/*/*.d
+
 # ----------------------
 # UPDATE LD_LIBRARY_PATH
 # ----------------------
@@ -248,12 +292,19 @@ endif
 export LD_LIBRARY_PATH := $(LD_LIBRARY_PATH):$(PATH_LIB_DIVERSUTILS)
 
 $(HOME)/.bashrc:
-	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
-	set -eu ; echo "INFO: \033[1mConsider running \"\033[33msource ~/.bashrc\033[0m\033[1m\" if you cannot link against *.so files.\033[0m"
+	set -eu ; if [ "$$(grep "$# >>> diversutils initialise >>>" ~/.bashrc)" = "" ] ; then echo$(SHELL_COLOR_ARG) "# >>> diversutils initialise >>>" >> $(HOME)/.bashrc ; echo$(SHELL_COLOR_ARG) "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:/usr/lib:/usr/lib/x86_64-linux-gnu:\$$HOME/.local/lib/diversutils" >> $(HOME)/.bashrc ; echo$(SHELL_COLOR_ARG) "# <<< diversutils initialise <<<" >> $(HOME)/.bashrc ; echo$(SHELL_COLOR_ARG) "INFO: \"\033[1m\033[32m$(HOME)/.bashrc\"\033[0m has been updated." ; fi
+	set -eu ; echo$(SHELL_COLOR_ARG) "INFO: \033[1mConsider running \"\033[33msource ~/.bashrc\033[0m\033[1m\" if you cannot link against *.so files.\033[0m"
 	
 # ----------------
 # MACRO PARAMETERS
 # ----------------
+
+#INITIALIZE_GRAPH_WITH_RANDOM_VECTOR = 1
+#MST_SANITY_TESTING = 1
+INITIALIZE_GRAPH_WITH_RANDOM_VECTOR = 0
+MST_SANITY_TESTING = 0
+#MST_IMPLEMENTATION_VERSION = 2
+MST_IMPLEMENTATION_VERSION = 3
 
 NUM_ROW_THREADS = -1
 NUM_MATRIX_THREADS = -1
@@ -272,6 +323,7 @@ ENABLE_LEXICOGRAPHIC = 1
 ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY = 1
 ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY = 1
 ENABLE_LEINSTER_COBBOLD_DIVERSITY = 1
+ENABLE_MST = 1
 ENABLE_FUNCTIONAL_EVENNESS = 1
 ENABLE_FUNCTIONAL_DISPERSION = 1
 ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED = 1
@@ -342,16 +394,15 @@ ifeq ($(origin W2V_PATH), undefined)
     W2V_PATH = \"/home/esteve/Documents/thesis/other_repos/word2vec/bin/MWE_MTLB-STRUCT_FR_raw_001-004_v3_skip-gram_100d.bin\" # FR eval
 endif
 
-#TARGET_COLUMN = UD_FORM
+TARGET_COLUMN = UD_FORM
 #TARGET_COLUMN = UD_LEMMA
-TARGET_COLUMN = UD_MWE
+#TARGET_COLUMN = UD_MWE
 
 ifeq ($(origin ENABLE_TOKEN_UTF8_NORMALISATION), undefined)
     ENABLE_TOKEN_UTF8_NORMALISATION = 1
 endif
-ifeq ($(origin ENABLE_FILTER), undefined)
-    ENABLE_FILTER = 1
-    FILTER_OBJ=$(BLD)/filter.o
+ifeq ($(ENABLE_FILTER), 1)
+    FILTER_BLD=$(BLD)/filter.o
     FILTER_TGT=$(TGT)/filter.c
 endif
 ENABLE_FILTER_ON_JSONL_DOCUMENTS = 1
@@ -368,7 +419,7 @@ CPP_MACRO_MULTITHREADING = -DNUM_ROW_THREADS=$(NUM_ROW_THREADS) -DNUM_MATRIX_THR
 
 CPP_MACRO_AVX = -DENABLE_AVX256=$(ENABLE_AVX256) -DENABLE_AVX512=$(ENABLE_AVX512)
 
-CPP_MACRO_DISPARITY = -DENABLE_DISPARITY_FUNCTIONS=$(ENABLE_DISPARITY_FUNCTIONS) -DENABLE_STIRLING=$(ENABLE_STIRLING) -DENABLE_RICOTTA_SZEIDL=$(ENABLE_RICOTTA_SZEIDL) -DENABLE_PAIRWISE=$(ENABLE_PAIRWISE) -DENABLE_LEXICOGRAPHIC=$(ENABLE_LEXICOGRAPHIC) -DENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY=$(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY) -DENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY=$(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY) -DENABLE_LEINSTER_COBBOLD_DIVERSITY=$(ENABLE_LEINSTER_COBBOLD_DIVERSITY) -DENABLE_FUNCTIONAL_EVENNESS=$(ENABLE_FUNCTIONAL_EVENNESS) -DENABLE_FUNCTIONAL_DISPERSION=$(ENABLE_FUNCTIONAL_DISPERSION) -DENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED=$(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED)
+CPP_MACRO_DISPARITY = -DENABLE_DISPARITY_FUNCTIONS=$(ENABLE_DISPARITY_FUNCTIONS) -DENABLE_STIRLING=$(ENABLE_STIRLING) -DENABLE_RICOTTA_SZEIDL=$(ENABLE_RICOTTA_SZEIDL) -DENABLE_PAIRWISE=$(ENABLE_PAIRWISE) -DENABLE_LEXICOGRAPHIC=$(ENABLE_LEXICOGRAPHIC) -DENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY=$(ENABLE_CHAO_ET_AL_FUNCTIONAL_DIVERSITY) -DENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY=$(ENABLE_SCHEINER_SPECIES_PHYLOGENETIC_FUNCTIONAL_DIVERSITY) -DENABLE_LEINSTER_COBBOLD_DIVERSITY=$(ENABLE_LEINSTER_COBBOLD_DIVERSITY) -DENABLE_MST=$(ENABLE_MST) -DENABLE_FUNCTIONAL_EVENNESS=$(ENABLE_FUNCTIONAL_EVENNESS) -DENABLE_FUNCTIONAL_DISPERSION=$(ENABLE_FUNCTIONAL_DISPERSION) -DENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED=$(ENABLE_FUNCTIONAL_DIVERGENCE_MODIFIED)
 
 CPP_MACRO_NON_DISPARITY = -DENABLE_NON_DISPARITY_FUNCTIONS=$(ENABLE_NON_DISPARITY_FUNCTIONS) -DENABLE_SHANNON_WEAVER_ENTROPY=$(ENABLE_SHANNON_WEAVER_ENTROPY) -DENABLE_GOOD_ENTROPY=$(ENABLE_GOOD_ENTROPY) -DENABLE_RENYI_ENTROPY=$(ENABLE_RENYI_ENTROPY) -DENABLE_PATIL_TAILLIE_ENTROPY=$(ENABLE_PATIL_TAILLIE_ENTROPY) -DENABLE_Q_LOGARITHMIC_ENTROPY=$(ENABLE_Q_LOGARITHMIC_ENTROPY) -DENABLE_SIMPSON_INDEX=$(ENABLE_SIMPSON_INDEX) -DENABLE_SIMPSON_DOMINANCE_INDEX=$(ENABLE_SIMPSON_DOMINANCE_INDEX) -DENABLE_HILL_NUMBER_STANDARD=$(ENABLE_HILL_NUMBER_STANDARD) -DENABLE_HILL_EVENNESS=$(ENABLE_HILL_EVENNESS) -DENABLE_BERGER_PARKER_INDEX=$(ENABLE_BERGER_PARKER_INDEX) -DENABLE_JUNGE1994_PAGE20=$(ENABLE_JUNGE1994_PAGE20) -DENABLE_JUNGE1994_PAGE22=$(ENABLE_JUNGE1994_PAGE22) -DENABLE_BRILLOUIN_DIVERSITY=$(ENABLE_BRILLOUIN_DIVERSITY) -DENABLE_MCINTOSH_INDEX=$(ENABLE_MCINTOSH_INDEX) -DENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975=$(ENABLE_SW_ENTROPY_OVER_LOG_N_SPECIES_PIELOU1975) -DENABLE_SW_E_HEIP=$(ENABLE_SW_E_HEIP) -DENABLE_SW_E_ONE_MINUS_D=$(ENABLE_SW_E_ONE_MINUS_D) -DENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964=$(ENABLE_SW_E_ONE_OVER_LN_D_WILLIAMS1964) -DENABLE_SW_E_MINUS_LN_D_PIELOU1977=$(ENABLE_SW_E_MINUS_LN_D_PIELOU1977) -DENABLE_SW_F_2_1_ALATALO1981=$(ENABLE_SW_F_2_1_ALATALO1981) -DENABLE_SW_G_2_1_MOLINARI1989=$(ENABLE_SW_G_2_1_MOLINARI1989) -DENABLE_SW_E_BULLA1994=$(ENABLE_SW_E_BULLA1994) -DENABLE_SW_O_BULLA1994=$(ENABLE_SW_O_BULLA1994) -DENABLE_SW_E_MCI_PIELOU1969=$(ENABLE_SW_E_MCI_PIELOU1969) -DENABLE_SW_E_PRIME_CAMARGO1993=$(ENABLE_SW_E_PRIME_CAMARGO1993) -DENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL=$(ENABLE_SW_E_VAR_SMITH_AND_WILSON1996_ORIGINAL)
 
@@ -380,7 +431,7 @@ CPP_MACRO_IO = -DINPUT_PATH=$(INPUT_PATH) -DOUTPUT_PATH=$(OUTPUT_PATH) -DOUTPUT_
 
 CPP_MACRO_FILTER = -DENABLE_FILTER=$(ENABLE_FILTER) -DENABLE_FILTER_ON_JSONL_DOCUMENTS=$(ENABLE_FILTER_ON_JSONL_DOCUMENTS) -DENABLE_FILTER_XML=$(ENABLE_FILTER_XML) -DENABLE_FILTER_PATH=$(ENABLE_FILTER_PATH) -DENABLE_FILTER_URL=$(ENABLE_FILTER_URL) -DENABLE_FILTER_EMAIL=$(ENABLE_FILTER_EMAIL) -DENABLE_FILTER_ALPHANUM=$(ENABLE_FILTER_ALPHANUM) -DENABLE_FILTER_LONG=$(ENABLE_FILTER_LONG) -DENABLE_FILTER_NON_FRENCH=$(ENABLE_FILTER_NON_FRENCH)
 
-CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) -DENABLE_TOKEN_UTF8_NORMALISATION=$(ENABLE_TOKEN_UTF8_NORMALISATION) -DPCRE2_CODE_UNIT_WIDTH=$(PCRE2_CODE_UNIT_WIDTH) -DALPHA_GENERAL=$(ALPHA_GENERAL) -DBETA_GENERAL=$(BETA_GENERAL) -DCOMPILATION_DIR=\"$(PWD)\"
+CPP_MACRO_OTHER = -DTARGET_COLUMN=$(TARGET_COLUMN) -DTOKENIZATION_METHOD=$(TOKENIZATION_METHOD) -DENABLE_TOKEN_UTF8_NORMALISATION=$(ENABLE_TOKEN_UTF8_NORMALISATION) -DPCRE2_CODE_UNIT_WIDTH=$(PCRE2_CODE_UNIT_WIDTH) -DALPHA_GENERAL=$(ALPHA_GENERAL) -DBETA_GENERAL=$(BETA_GENERAL) -DSORTED_ARRAY_METHOD=$(SORTED_ARRAY_METHOD) -DINITIALIZE_GRAPH_WITH_RANDOM_VECTOR=$(INITIALIZE_GRAPH_WITH_RANDOM_VECTOR) -DMST_SANITY_TESTING=$(MST_SANITY_TESTING) -DMST_IMPLEMENTATION_VERSION=$(MST_IMPLEMENTATION_VERSION) -DENABLE_UDPIPE_PARSING=$(ENABLE_UDPIPE_PARSING) -DCOMPILATION_DIR=\"$(PWD)\"
 
 CPP_MACROS = $(CPP_MACRO_MULTITHREADING) $(CPP_MACRO_AVX) $(CPP_MACRO_DISPARITY) $(CPP_MACRO_NON_DISPARITY) $(CPP_MACRO_TIMING) $(CPP_MACRO_RECOMPUTE) $(CPP_MACRO_IO) $(CPP_MACRO_FILTER) $(CPP_MACRO_OTHER)
 
@@ -393,32 +444,25 @@ CPP_MACROS_JSONL = -DTARGET_NUMBER_DOCUMENTS=$(TARGET_NUMBER_DOCUMENTS)
 ################
 
 $(DIVERSUTILS_WORK_PATH)/udpipe:
-	echo "INFO: Ensuring UDPipe is updated"
+	echo$(SHELL_COLOR_ARG) "INFO: Ensuring UDPipe is updated"
 	git submodule update --init --recursive $(DIVERSUTILS_WORK_PATH)/udpipe
 
-SRC = $(DIVERSUTILS_WORK_PATH)/src
-TGT = $(SRC)/target
-INC = $(SRC)/include
-BLD = $(DIVERSUTILS_WORK_PATH)/build
-BIN = $(DIVERSUTILS_WORK_PATH)/bin
-TST = $(DIVERSUTILS_WORK_PATH)/test
-
 $(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only/udpipe.cpp: $(DIVERSUTILS_WORK_PATH)/udpipe
-	echo "INFO: Ensuring UDPipe is prepared"
+	echo$(SHELL_COLOR_ARG) "INFO: Ensuring UDPipe is prepared"
 	set -eu ; make -s --directory=udpipe/src
 	set -eu ; make -s --directory=udpipe/src_lib_only
 
 $(PATH_LIB_DIVERSUTILS)/libudpipe.so: $(DIVERSUTILS_WORK_PATH)/udpipe/src_lib_only/udpipe.cpp $(TGT)/udpipe/interface.cpp
-	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
+	echo$(SHELL_COLOR_ARG) "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
-	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
-	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAGS_CXX)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
+	$(CCPP) $(CPP_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) $(LINKER_FLAGS_CXX) -MMD -MF $(DEP)/$*.d
 	export LD_LIBRARY_PATH=$(PATH_LIB_DIVERSUTILS):$$LD_LIBRARY_PATH
 
-BLD_DIRECTORIES = $(BLD) $(BLD)/cupt $(BLD)/jsonl $(BLD)/sorted_array $(BLD)/unicode $(BLD)/cfgparser $(BLD)/udpipe/interface
+BLD_DIRECTORIES = $(BLD) $(BLD)/cupt $(BLD)/jsonl $(BLD)/sorted_array $(BLD)/unicode $(BLD)/cfgparser $(BLD)/udpipe/interface $(BLD)/random $(DEP)/cupt $(DEP)/jsonl $(DEP)/sorted_array $(DEP)/unicode $(DEP)/cfgparser $(DEP)/udpipe/interface $(DEP)/random
 
 $(BLD_DIRECTORIES): %:
-	set -eu ; echo "INFO: Creating \"\033[1m\033[32m$@\033[0m\""
+	set -eu ; echo$(SHELL_COLOR_ARG) "INFO: Creating \"\033[1m\033[32m$@\033[0m\""
 	set -eu ; mkdir -p $@
     
 $(BLD)/.placeholder: $(BLD_DIRECTORIES)
@@ -427,39 +471,39 @@ $(BLD)/.placeholder: $(BLD_DIRECTORIES)
 $(BIN)/.placeholder:
 	set -eu ; mkdir -p $(BIN) ; touch $@
 
-$(INC)/dfunctions.h: $(INC)/graph.h $(INC)/general_constants.h
-$(INC)/distances.h: $(INC)/graph.h
-$(INC)/distributions.h: $(INC)/graph.h
-$(INC)/measurement.h: $(INC)/graph.h $(INC)/sorted_array/array.h
-$(INC)/cupt/parser.h: $(INC)/cupt/constants.h
-$(INC)/cupt/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
-$(INC)/jsonl/parser.h: $(INC)/jsonl/constants.h
-$(INC)/jsonl/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
-$(INC)/sorted_array/array.h: $(INC)/sorted_array/constants.h
-$(INC)/unicode/utf8.h: $(INC)/unicode/unicode.h
-
-
-$(TGT)/cpu.c: $(INC)/cpu.h
-$(TGT)/graph.c: $(INC)/general_constants.h $(INC)/distances.h $(INC)/cupt/parser.h $(INC)/stats.h $(INC)/logging.h
-$(TGT)/dfunctions.c: $(INC)/dfunctions.h $(INC)/graph.h $(INC)/general_constants.h
-$(TGT)/distances.c: $(INC)/distances.h
-$(TGT)/distributions.c: $(INC)/distributions.h
-$(TGT)/stats.c: $(INC)/stats.h
-$(TGT)/logging.c.c: $(INC)/logging.h
-$(TGT)/measurement.c.c: $(INC)/measurement.h $(INC)/dfunctions.h $(INC)/distributions.h $(INC)/graph.h $(INC)/cpu.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/stats.h
-$(TGT)/sanitize.c: $(INC)/sanitize.h
-$(TGT)/cupt/parser.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h
-$(TGT)/cupt/load.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h $(INC)/cupt/load.h
-$(TGT)/jsonl/parser.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h
-$(TGT)/jsonl/load.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h $(INC)/jsonl/load.h $(INC)/cupt/constants.h
-$(TGT)/cfgparser/parser.c: $(INC)/cfgparser/parser.h
-$(TGT)/unicode/utf8.c: $(INC)/unicode/unicode.h $(INC)/unicode/utf8.h
-$(TGT)/sorted_array/array.c: $(INC)/sorted_array/array.h $(INC)/sorted_array/constants.h
-$(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
-$(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h $(INC)/udpipe/interface/conversion.h
-$(TGT)/filter.c: $(INC)/filter.h $(INC)/logging.h
-$(TGT)/case.c: $(INC)/case.h
-$(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/filter.h $(INC)/case.h $(INC)/macroconfig.h
+#$(INC)/dfunctions.h: $(INC)/graph.h $(INC)/general_constants.h
+#$(INC)/distances.h: $(INC)/graph.h
+#$(INC)/distributions.h: $(INC)/graph.h
+#$(INC)/measurement.h: $(INC)/graph.h $(INC)/sorted_array/array.h
+#$(INC)/cupt/parser.h: $(INC)/cupt/constants.h
+#$(INC)/cupt/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
+#$(INC)/jsonl/parser.h: $(INC)/jsonl/constants.h
+#$(INC)/jsonl/load.h: $(INC)/graph.h $(INC)/sorted_array/array.h $(INC)/measurement.h
+#$(INC)/sorted_array/array.h: $(INC)/sorted_array/constants.h
+#$(INC)/unicode/utf8.h: $(INC)/unicode/unicode.h
+#
+#
+#$(TGT)/cpu.c: $(INC)/cpu.h
+#$(TGT)/graph.c: $(INC)/general_constants.h $(INC)/distances.h $(INC)/cupt/parser.h $(INC)/stats.h $(INC)/logging.h
+#$(TGT)/dfunctions.c: $(INC)/dfunctions.h $(INC)/graph.h $(INC)/general_constants.h
+#$(TGT)/distances.c: $(INC)/distances.h
+#$(TGT)/distributions.c: $(INC)/distributions.h
+#$(TGT)/stats.c: $(INC)/stats.h
+#$(TGT)/logging.c.c: $(INC)/logging.h
+#$(TGT)/measurement.c.c: $(INC)/measurement.h $(INC)/dfunctions.h $(INC)/distributions.h $(INC)/graph.h $(INC)/cpu.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/stats.h
+#$(TGT)/sanitize.c: $(INC)/sanitize.h
+#$(TGT)/cupt/parser.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h
+#$(TGT)/cupt/load.c: $(INC)/cupt/parser.h $(INC)/cupt/constants.h $(INC)/cupt/load.h
+#$(TGT)/jsonl/parser.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h
+#$(TGT)/jsonl/load.c: $(INC)/jsonl/parser.h $(INC)/jsonl/constants.h $(INC)/jsonl/load.h $(INC)/cupt/constants.h
+#$(TGT)/cfgparser/parser.c: $(INC)/cfgparser/parser.h
+#$(TGT)/unicode/utf8.c: $(INC)/unicode/unicode.h $(INC)/unicode/utf8.h
+#$(TGT)/sorted_array/array.c: $(INC)/sorted_array/array.h $(INC)/sorted_array/constants.h
+#$(TGT)/udpipe/interface.cpp: $(INC)/udpipe_interface.hpp
+#$(TGT)/udpipe/interface/conversion.c: $(INC)/udpipe/interface/cinterface.h $(INC)/udpipe/interface/conversion.h
+#$(TGT)/filter.c: $(INC)/filter.h $(INC)/logging.h
+#$(TGT)/case.c: $(INC)/case.h
+#$(TGT)/main_measurement.c: $(INC)/cpu.h $(INC)/graph.h $(INC)/distributions.h $(INC)/stats.h $(INC)/dfunctions.h $(INC)/sorted_array/array.h $(INC)/logging.h $(INC)/measurement.h $(INC)/jsonl/parser.h $(INC)/jsonl/load.h $(INC)/cupt/parser.h $(INC)/cupt/load.h $(INC)/udpipe/interface/cinterface.h $(INC)/filter.h $(INC)/case.h $(INC)/macroconfig.h
 
 ifneq ($(TOKENIZATION_METHOD), 0)
 	$(info INFO: Adding UDPipe elements to requirements)
@@ -468,21 +512,21 @@ ifneq ($(TOKENIZATION_METHOD), 0)
     DIVERSUTILS_TOKENIZATION_CXX_OBJECTS = $(BLD)/udpipe/interface.o
 endif
 
-DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(FILTER_TGT) $(TGT)/case.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
-DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(FILTER_BLD) $(BLD)/case.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
+DIVERSUTILS_C_FILES = $(TGT)/cpu.c $(TGT)/graph.c $(TGT)/dfunctions.c $(TGT)/distances.c $(TGT)/distributions.c $(TGT)/stats.c $(TGT)/logging.c $(TGT)/measurement.c $(TGT)/sanitize.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/cupt/extended_categories.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/unicode/utf8.c $(TGT)/cfgparser/parser.c $(FILTER_TGT) $(TGT)/case.c $(TGT)/random/lfsr.c $(DIVERSUTILS_TOKENIZATION_C_FILES)
+DIVERSUTILS_C_OBJECTS = $(BLD)/cpu.o $(BLD)/graph.o $(BLD)/dfunctions.o $(BLD)/distances.o $(BLD)/distributions.o $(BLD)/stats.o $(BLD)/logging.o $(BLD)/measurement.o $(BLD)/sanitize.o $(BLD)/cupt/parser.o $(BLD)/cupt/load.o $(BLD)/cupt/extended_categories.o $(BLD)/jsonl/parser.o $(BLD)/jsonl/load.o $(BLD)/sorted_array/array.o $(BLD)/unicode/utf8.o $(BLD)/cfgparser/parser.o $(FILTER_BLD) $(BLD)/case.o $(BLD)/random/lfsr.o $(DIVERSUTILS_TOKENIZATION_C_OBJECTS)
 DIVERSUTILS_CXX_OBJECTS = $(DIVERSUTILS_TOKENIZATION_CXX_OBJECTS)
 
 $(DIVERSUTILS_C_OBJECTS) $(BLD)/main_measurement.o: $(BLD)/%.o: $(TGT)/%.c $(BLD)/.placeholder
-	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
-	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+	echo$(SHELL_COLOR_ARG) "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
+	$(CC) $< $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@ -MMD -MF $(DEP)/$*.d
 $(DIVERSUTILS_CXX_OBJECTS): $(BLD)/%.o: $(TGT)/%.cpp $(BLD)/.placeholder
-	echo "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
-	$(CCPP) $< $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@
+	echo$(SHELL_COLOR_ARG) "INFO: Building \"\033[1m\033[32m$@\033[0m\" from \"\033[1m\033[34m$<\033[0m\""
+	$(CCPP) $< $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) -c -o $@ -MMD -MF $(DEP)/$*.d
 
 $(BIN)/main_measurement: $(BIN)/.placeholder $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(HOME)/.bashrc $(DIVERSUTILS_WORK_PATH)/makefile
-	echo "INFO: Linking \"\033[1m\033[31m$@\033[0m\" from \"\033[1m\033[32m$(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS)\033[0m\""
-	$(CCPP) $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) -flto -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
-	echo "INFO: You may now run \"\033[1m\033[33mcd $(BIN) ; ./main_measurement\033[0m\""
+	echo$(SHELL_COLOR_ARG) "INFO: Linking \"\033[1m\033[31m$@\033[0m\" from \"\033[1m\033[32m$(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS)\033[0m\""
+	$(CCPP) $(DIVERSUTILS_C_OBJECTS) $(DIVERSUTILS_CXX_OBJECTS) $(BLD)/main_measurement.o $(CXX_VERSION) $(CFLAGS) $(CPPFLAGS) $(CPPFLAGS_CXX) $(OPT_LEVEL) $(CPP_MACROS) $(LDFLAGS) $(FLAGLTO) -o $@ $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
+	echo$(SHELL_COLOR_ARG) "INFO: You may now run \"\033[1m\033[33mcd $(BIN) ; ./main_measurement\033[0m\""
 
 measurement: $(BLD)/.placeholder $(BIN)/.placeholder $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(BIN)/main_measurement
 
@@ -499,12 +543,12 @@ all: shared_libraries measurement
 # ----------------
 
 $(PATH_LIB_DIVERSUTILS)/libdiversutils.so: $(DIVERSUTILS_C_FILES)
-	echo "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
+	echo$(SHELL_COLOR_ARG) "INFO: Ensuring directory \"\033[1m\033[32m$(PATH_LIB_DIVERSUTILS)\033[0m\" exists"
 	mkdir -p $(PATH_LIB_DIVERSUTILS)
-	echo "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) $(CPP_MACROS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) -MMD -MF $(DEP)/$*.d
 
-DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(TGT)/measurement.c $(TGT)/dfunctions.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/logging.c $(TGT)/distances.c $(TGT)/stats.c $(TGT)/sanitize.c $(TGT)/unicode/utf8.c $(TGT)/distributions.c $(TGT)/cpu.c
+DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(TGT)/measurement.c $(TGT)/dfunctions.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/logging.c $(TGT)/distances.c $(TGT)/stats.c $(TGT)/sanitize.c $(TGT)/unicode/utf8.c $(TGT)/distributions.c $(TGT)/cpu.c $(TGT)/cupt/extended_categories.c
 
 $(BLD)/_diversutilsmodule.c: $(DIVERSUTILS_C_FILES_PYTHON_BUNDLE) $(BLD)
 	cat $(SRC)/_diversutilsmodule.c > $@
@@ -539,26 +583,26 @@ $(TST)/include/test_graph.h: $(TST)/include/test_general.h $(INC)/graph.h $(INC)
 $(TST)/main_test.c: $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h
 
 $(TST)/test_all: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/include/test_entropy.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ALL -o test/test_all test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ALL -o test/test_all test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_graph_relative_proportion: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_graph.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_GRAPH_RELATIVE_PROPORTION -o test/test_graph_relative_proportion test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_entropy_shannon_weaver: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_SHANNON_WEAVER -o test/test_entropy_shannon_weaver test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_entropy_patil_taillie: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_PATIL_TAILLIE -o test/test_entropy_patil_taillie test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_entropy_renyi: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_RENYI -o test/test_entropy_renyi test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_entropy_q_logarithmic: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_entropy.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_ENTROPY_Q_LOGARITHMIC -o test/test_entropy_q_logarithmic test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 $(TST)/test_equivalence_entropy: $(DIVERSUTILS_C_OBJECTS) $(TST)/include/test_general.h $(TST)/include/test_equivalence.h $(TST)/main_test.c
-	echo "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
-	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA)
+	echo$(SHELL_COLOR_ARG) "INFO: Generating \"\033[1m\033[31m$@\033[0m\""
+	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS_TEST) $(OPT_LEVEL) $(LDFLAGS) -DENABLE_AVX256=0 -DENABLE_AVX512=0 -DTEST_EQUIVALENCE_ENTROPY -o test/test_equivalence_entropy test/main_test.c $(DIVERSUTILS_C_OBJECTS) $(LINKER_FLAGS) $(LINKER_FLAGS_EXTRA) -MMD -MF $(DEP)/$*.d
 	
 
 # ------
@@ -586,3 +630,14 @@ man:
 	mkdir -p docs/man
 	rst2man README.rst > docs/man/diversutils.3
 
+cppcheck:
+	#set -eu ; cppcheck --enable=warning,portability,information,missingInclude --suppress=missingIncludeSystem --check-level=exhaustive --force -$(C_VERSION) -I$(INC) $(DIVERSUTILS_C_FILES)
+	set -eu ; cppcheck --enable=warning,portability,information,missingInclude --suppress=missingIncludeSystem --force -$(C_VERSION) -I$(INC) $(DIVERSUTILS_C_FILES)
+
+cppcheck-global:
+	#$(CC) -E -I$(INC) $(CFLAGS) $(CPPFLAGS) $(CPP_MACROS) -o $(BLD)/global.c $(TGT)/main_measurement.c
+	echo "" > $(BLD)/global.c ; for f in $(DIVERSUTILS_C_FILES) ; do cat $$f >> $(BLD)/global.c ; done
+	#set -eu ; cppcheck --enable=warning,portability,information,missingInclude --suppress=missingIncludeSystem --check-level=exhaustive --force -$(C_VERSION) -I$(INC) $(BLD)/global.c
+	set -eu ; cppcheck --enable=warning,portability,information,missingInclude --suppress=missingIncludeSystem --force -$(C_VERSION) -I$(INC) $(BLD)/global.c
+
+.PHONY: format_include format_target format_all sphinx man cppcheck
