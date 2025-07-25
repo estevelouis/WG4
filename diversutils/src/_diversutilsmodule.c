@@ -844,7 +844,7 @@ static PyObject* interface_score_file(PyObject* self, PyObject* args){
         size_t len_s = strlen(s);
 
         if(strcmp(s + len_s - 5, ".cupt") == 0 || strcmp(s + len_s - 7, ".conllu") == 0){
-            if(cupt_to_graph(i, s, s_tp, &mcfg, &sref, &mmut) != 0){
+            if(cupt_to_graph(i, s, s_tp, &mcfg, &sref, &mmut, NULL) != 0){
                 PyErr_Format(PyExc_Exception, "Failed to call cupt_to_graph for %s.", s);
                 pthread_mutex_destroy(&mmut.mutex);
                 free_graph(&g);
