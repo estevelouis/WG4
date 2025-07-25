@@ -94,12 +94,18 @@ functions. Listed below are the functions that can be deactivated.
 
 ...
 
+### Linking
+
+For linking purposes, the `LD_LIBRARY_PATH` environment variable must contain
+both `$HOME/.local/lib/diversutils` and the standard lib path of the system
+(usually `/usr/lib/x86_64-linux-gnu`).
+
 ## Python interface
 
 A Python interface is being designed.
 By running
 ```bash
-python3 -m pip install .
+python3 -m pip install -e .
 ```
 `setup.py` will be used to install the `diversutils` package.
 

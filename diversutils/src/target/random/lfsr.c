@@ -1,7 +1,7 @@
 /*
  *      DiversUtils - Functions to measure diversity
  *
- * Copyright (c) 2024  LISN / Université Paris-Saclay / CNRS  Louis Estève (louis.esteve@universite-paris-saclay.fr)
+ * Copyright (c) 2025  LISN / Université Paris-Saclay / CNRS  Louis Estève (louis.esteve@universite-paris-saclay.fr)
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,15 +25,30 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GENERAL_CONSTANTS_H
+#include <stdint.h>
+#include <stdio.h>
 
-#ifndef PI
-#define PI 3.141592653589793
-#endif
+#include "random/lfsr.h"
 
+int32_t lfsr_init(struct lfsr * restrict const rng, const uint64_t seed){
+    if(seed == 0){
+        perror("LFSR seed cannot be 0\n");
+        return 1;
+    }
+    rng->status = seed;
+    return 0;
+}
 
-#ifndef E
-#define E 2.718281828459045
-#endif
+void lfsr_rand(struct lfsr * restrict const rng){
+    uint64_t output = 0;
+    for(uint64_t i = 0 ; i < 64 ; i++){
+        uint64_t new_output_bit = rng->status % 2;
+        output |= new_output_bit << i;
 
-#endif
+        // https://datacipy.cz/lfsr_table.pdf
+        uint64_t new_status_bit = (rng->status ^ (rng->status >> 1) ^ (rng->status >> 3) ^ (rng->status >> 4) ^ 1);
+        rng->status = (rng->status >> 1) | (new_status_bit << 63);
+    }
+
+    rng->output = output;
+}

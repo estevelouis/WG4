@@ -25,15 +25,37 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef GENERAL_CONSTANTS_H
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#ifndef PI
-#define PI 3.141592653589793
-#endif
+#include "udpipe/download.h"
+#include "udpipe/sources/source.h"
+#include "udpipe/sources/udpipe1/all.h"
 
+int32_t ensure_udpipe_model_is_available(const char * const isolang){
+    size_t n = sizeof(all_udpipe_sources) / sizeof(all_udpipe_sources[0]);
+    for(size_t i = 0 ; i < n ; i++){
+        if(strcmp(isolang, all_udpipe_sources[i].isolang) == 0){
+            const int32_t bfr_size = 512;
+            char bfr[bfr_size];
+            memset(bfr, '\0', bfr_size);
 
-#ifndef E
-#define E 2.718281828459045
-#endif
+            snprintf(bfr, bfr_size, "curl -o data/udpipe/udpipe1/%s %s%s", all_udpipe_sources[i].filename, all_udpipe_sources[i].url_download, all_udpipe_sources[i].filename);
 
-#endif
+            puts(bfr);
+
+            if(system(bfr) != 0){
+                fprintf(stderr, "Failed to launch \"%s\"\n", bfr);
+                return 1;
+            }
+
+            return 0;
+        }
+    }
+    
+    fprintf(stderr, "Unknown lang: \"%s\"\n", isolang);
+    return 1;
+}
