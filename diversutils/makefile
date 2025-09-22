@@ -548,7 +548,7 @@ $(PATH_LIB_DIVERSUTILS)/libdiversutils.so: $(DIVERSUTILS_C_FILES)
 	echo$(SHELL_COLOR_ARG) "INFO: Generating shared library \"\033[1m\033[32m$@\033[0m\""
 	$(CC) $(C_VERSION) $(CFLAGS) $(CPPFLAGS) $(OPT_LEVEL) $(LDFLAGS) $(CPP_MACROS) -shared -fPIC -o $@ $^ $(LINKER_FLAGS) -MMD -MF $(DEP)/$*.d
 
-DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(TGT)/measurement.c $(TGT)/dfunctions.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/logging.c $(TGT)/distances.c $(TGT)/stats.c $(TGT)/sanitize.c $(TGT)/unicode/utf8.c $(TGT)/distributions.c $(TGT)/cpu.c $(TGT)/cupt/extended_categories.c
+DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(TGT)/measurement.c $(TGT)/dfunctions.c $(TGT)/cupt/parser.c $(TGT)/cupt/load.c $(TGT)/jsonl/parser.c $(TGT)/jsonl/load.c $(TGT)/sorted_array/array.c $(TGT)/logging.c $(TGT)/distances.c $(TGT)/stats.c $(TGT)/sanitize.c $(TGT)/unicode/utf8.c $(TGT)/distributions.c $(TGT)/cpu.c # $(TGT)/cupt/extended_categories.c
 
 $(BLD)/_diversutilsmodule.c: $(DIVERSUTILS_C_FILES_PYTHON_BUNDLE) $(BLD)
 	cat $(SRC)/_diversutilsmodule.c > $@
