@@ -552,7 +552,8 @@ DIVERSUTILS_C_FILES_PYTHON_BUNDLE = $(TGT)/graph.c $(TGT)/cfgparser/parser.c $(T
 
 $(BLD)/_diversutilsmodule.c: $(DIVERSUTILS_C_FILES_PYTHON_BUNDLE) $(BLD)
 	cat $(SRC)/_diversutilsmodule.c > $@
-	for f in $^ ; do cat $$f >> $@ ; done
+	#for f in $^ ; do cat $$f >> $@ ; done
+	for f in $(DIVERSUTILS_C_FILES_PYTHON_BUNDLE) ; do cat $$f >> $@ ; done
 
 shared_libraries: $(PATH_LIB_DIVERSUTILS)/libudpipe.so $(PATH_LIB_DIVERSUTILS)/libdiversutils.so
 
